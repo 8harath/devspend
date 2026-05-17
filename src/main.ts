@@ -4,14 +4,14 @@ import { exportCsv, exportJson, type PeriodExport } from './export.js'
 import { loadPricing, setModelAliases } from './models.js'
 import { parseAllSessions, filterProjectsByName, filterProjectsByDateRange, clearSessionCache } from './parser.js'
 import { convertCost } from './currency.js'
-import { renderStatusBar } from './format.js'
+import { renderStatusBar, formatTokens, formatCost } from './format.js'
 import { type PeriodData, type ProviderCost } from './menubar-json.js'
 import { buildMenubarPayload } from './menubar-json.js'
 import { getDaysInRange, ensureCacheHydrated, emptyCache, BACKFILL_DAYS, toDateString } from './daily-cache.js'
 import { aggregateProjectsIntoDays, buildPeriodDataFromDays, dateKey } from './day-aggregator.js'
 import { CATEGORY_LABELS, type DateRange, type ProjectSummary, type TaskCategory } from './types.js'
 import { aggregateModelEfficiency } from './model-efficiency.js'
-import { renderDashboard } from './dashboard.js'
+import { renderDashboard, shortProject } from './dashboard.js'
 import { formatDateRangeLabel, parseDateRangeFlags, getDateRange, toPeriod, type Period } from './cli-date.js'
 import { runOptimize, scanAndDetect } from './optimize.js'
 import { renderCompare } from './compare.js'
@@ -1031,6 +1031,120 @@ program
       process.stderr.write(`devspend: unknown --format "${opts.format}". Choose table, markdown, json, or csv.\n`)
       process.exit(1)
     }
+  })
+
+program
+  .command('dirs')
+  .description('Token and cost breakdown by project directory')
+  .option('-p, --period <period>', 'Analysis period: today, week, 30days, month, all', '30days')
+  .option('--provider <provider>', 'Filter by provider (e.g. claude, cursor, copilot)', 'all')
+  .option('--sort <by>', 'Sort by: cost, tokens, sessions', 'cost')
+  .option('--top <n>', 'Show only the top N directories', (v: string) => parseInt(v, 10))
+  .option('--format <format>', 'Output format: table, json', 'table')
+  .action(async (opts) => {
+    await loadPricing()
+    const { range, label } = getDateRange(opts.period)
+    const projects = await parseAllSessions(range, opts.provider)
+
+    if (projects.length === 0) {
+      console.log('\n  No usage data found for the selected period.\n')
+      return
+    }
+
+    type DirRow = {
+      dir: string
+      fullPath: string
+      inputTokens: number
+      outputTokens: number
+      cacheTokens: number
+      costUSD: number
+      sessions: number
+    }
+
+    const rows: DirRow[] = projects.map(p => ({
+      dir: shortProject(p.projectPath || p.project),
+      fullPath: p.projectPath || p.project,
+      inputTokens: p.sessions.reduce((s, sess) => s + sess.totalInputTokens, 0),
+      outputTokens: p.sessions.reduce((s, sess) => s + sess.totalOutputTokens, 0),
+      cacheTokens: p.sessions.reduce((s, sess) => s + sess.totalCacheReadTokens + sess.totalCacheWriteTokens, 0),
+      costUSD: p.totalCostUSD,
+      sessions: p.sessions.length,
+    }))
+
+    const sortBy = opts.sort ?? 'cost'
+    rows.sort((a, b) => {
+      if (sortBy === 'tokens') return (b.inputTokens + b.outputTokens) - (a.inputTokens + a.outputTokens)
+      if (sortBy === 'sessions') return b.sessions - a.sessions
+      return b.costUSD - a.costUSD
+    })
+
+    const topN = typeof opts.top === 'number' && Number.isFinite(opts.top) ? opts.top : undefined
+    const displayRows = topN ? rows.slice(0, topN) : rows
+
+    if (opts.format === 'json') {
+      const { code, rate } = getCurrency()
+      process.stdout.write(JSON.stringify({
+        period: label,
+        provider: opts.provider,
+        currency: code,
+        dirs: displayRows.map(r => ({
+          dir: r.dir,
+          path: r.fullPath,
+          inputTokens: r.inputTokens,
+          outputTokens: r.outputTokens,
+          cacheTokens: r.cacheTokens,
+          cost: Math.round(r.costUSD * rate * 100) / 100,
+          sessions: r.sessions,
+        })),
+      }, null, 2) + '\n')
+      return
+    }
+
+    const DIR_W = Math.min(Math.max(...displayRows.map(r => r.dir.length), 9), 42)
+    const HDR = [
+      'Directory'.padEnd(DIR_W),
+      'Input'.padStart(8),
+      'Output'.padStart(8),
+      'Cache'.padStart(8),
+      'Sessions'.padStart(9),
+      'Cost'.padStart(9),
+    ]
+    const sep = '─'.repeat(HDR.join('  ').length)
+    const providerLabel = opts.provider === 'all' ? 'all providers' : opts.provider
+    process.stdout.write(`\n  Directory Breakdown  ·  ${label}  ·  ${providerLabel}\n\n`)
+    process.stdout.write(`  ${HDR.join('  ')}\n`)
+    process.stdout.write(`  ${sep}\n`)
+
+    for (const r of displayRows) {
+      const cols = [
+        r.dir.padEnd(DIR_W),
+        formatTokens(r.inputTokens).padStart(8),
+        formatTokens(r.outputTokens).padStart(8),
+        formatTokens(r.cacheTokens).padStart(8),
+        String(r.sessions).padStart(9),
+        formatCost(r.costUSD).padStart(9),
+      ]
+      process.stdout.write(`  ${cols.join('  ')}\n`)
+    }
+
+    process.stdout.write(`  ${sep}\n`)
+    const tot = {
+      inp: rows.reduce((s, r) => s + r.inputTokens, 0),
+      out: rows.reduce((s, r) => s + r.outputTokens, 0),
+      cch: rows.reduce((s, r) => s + r.cacheTokens, 0),
+      cost: rows.reduce((s, r) => s + r.costUSD, 0),
+      sess: rows.reduce((s, r) => s + r.sessions, 0),
+    }
+    const footerLabel = `${rows.length} ${rows.length === 1 ? 'directory' : 'directories'}`
+    const footer = [
+      footerLabel.padEnd(DIR_W),
+      formatTokens(tot.inp).padStart(8),
+      formatTokens(tot.out).padStart(8),
+      formatTokens(tot.cch).padStart(8),
+      String(tot.sess).padStart(9),
+      formatCost(tot.cost).padStart(9),
+    ]
+    process.stdout.write(`  ${footer.join('  ')}\n\n`)
   })
 
 program
