@@ -15,11 +15,11 @@ export const LARGE_STREAM_LINE_BYTES = 32 * 1024
 export const MAX_STREAM_SESSION_FILE_BYTES = 2 * 1024 * 1024 * 1024
 
 function verbose(): boolean {
-  return process.env.CODEBURN_VERBOSE === '1'
+  return process.env.DEVSPEND_VERBOSE === '1'
 }
 
 function warn(msg: string): void {
-  if (verbose()) process.stderr.write(`codeburn: ${msg}\n`)
+  if (verbose()) process.stderr.write(`devspend: ${msg}\n`)
 }
 
 export async function readSessionFile(filePath: string): Promise<string | null> {
