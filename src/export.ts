@@ -245,7 +245,7 @@ function buildReadme(periods: PeriodExport[]): string {
   const { code } = getCurrency()
   const generated = new Date().toISOString()
   const lines = [
-    'CodeBurn Usage Export',
+    'DevSpend Usage Export',
     '====================',
     '',
     `Generated: ${generated}`,
@@ -274,7 +274,7 @@ function buildReadme(periods: PeriodExport[]): string {
 
 /// Sentinel file dropped into every folder we create so we can safely overwrite an older
 /// codeburn export without ever deleting a user's unrelated files by accident.
-const EXPORT_MARKER_FILE = '.codeburn-export'
+const EXPORT_MARKER_FILE = '.devspend-export'
 
 async function isCodeburnExportFolder(path: string): Promise<boolean> {
   const markerStat = await stat(join(path, EXPORT_MARKER_FILE)).catch(() => null)
@@ -340,7 +340,7 @@ export async function exportJson(periods: PeriodExport[], outputPath: string): P
   const { code, rate, symbol } = getCurrency()
 
   const data = {
-    schema: 'codeburn.export.v2',
+    schema: 'devspend.export.v2',
     generated: new Date().toISOString(),
     currency: { code, rate, symbol },
     summary: buildSummaryRows(periods),
@@ -371,9 +371,9 @@ export async function exportJson(periods: PeriodExport[], outputPath: string): P
       const buf = Buffer.alloc(4096)
       const { bytesRead } = await fh.read(buf, 0, buf.length, 0)
       const head = buf.toString('utf-8', 0, bytesRead)
-      if (!head.includes('"schema": "codeburn.export.v')) {
+      if (!head.includes('"schema": "devspend.export.v')) {
         throw new Error(
-          `Refusing to overwrite ${target}: file does not look like a codeburn export. ` +
+          `Refusing to overwrite ${target}: file does not look like a devspend export. ` +
           `Delete it manually or pick a different -o path.`
         )
       }
