@@ -59,7 +59,7 @@ function getSortedPricingKeys(): string[] {
 }
 
 function getCacheDir(): string {
-  return join(homedir(), '.cache', 'codeburn')
+  return join(homedir(), '.cache', 'devspend')
 }
 
 function getCachePath(): string {
@@ -302,8 +302,8 @@ function shouldWarnAboutUnknownModel(name: string): boolean {
   // dashboard) which made first launches look broken — three "no pricing
   // data" lines greet a user before the dashboard even draws. Now opt-in
   // via --verbose. The unknown model still costs $0 in reports; users who
-  // suspect missing models run `codeburn --verbose` to see the list.
-  if (process.env['CODEBURN_VERBOSE'] !== '1') return false
+  // suspect missing models run `devspend --verbose` to see the list.
+  if (process.env['DEVSPEND_VERBOSE'] !== '1') return false
   return true
 }
 
@@ -325,10 +325,10 @@ export function calculateCost(
       // payloads written by external tools, so a hostile or corrupt file
       // could embed terminal escape sequences here.
       const safeName = model.replace(/[\x00-\x1F\x7F-\x9F]/g, '?').slice(0, 200)
-      const aliasHint = `Map it with: codeburn model-alias "${safeName}" <known-model>`
+      const aliasHint = `Map it with: devspend model-alias "${safeName}" <known-model>`
       process.stderr.write(
-        `codeburn: no pricing data for model "${safeName}" — costs for this model will show $0. ` +
-        `${aliasHint}, or update with: npx codeburn@latest.\n`
+        `devspend: no pricing data for model "${safeName}" — costs for this model will show $0. ` +
+        `${aliasHint}, or update with: npx devspend@latest.\n`
       )
     }
     return 0
