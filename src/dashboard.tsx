@@ -203,7 +203,7 @@ function Overview({ projects, label, width, planUsages }: { projects: ProjectSum
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={PANEL_COLORS.overview} paddingX={1} width={width}>
       <Text wrap="truncate-end">
-        <Text bold color={ORANGE}>CodeBurn</Text>
+        <Text bold color={ORANGE}>DevSpend</Text>
         <Text dimColor>  {label}</Text>
       </Text>
       <Text wrap="truncate-end">
@@ -649,7 +649,7 @@ function OptimizeView({ findings, costRate, projects, label, width, healthScore,
     <Box flexDirection="column" width={width}>
       <Box flexDirection="column" borderStyle="round" borderColor={ORANGE} paddingX={1} width={width}>
         <Text wrap="truncate-end">
-          <Text bold color={ORANGE}>CodeBurn Optimize</Text>
+          <Text bold color={ORANGE}>DevSpend Optimize</Text>
           <Text dimColor>  {label}   Setup: </Text>
           <Text bold color={gradeColor}>{healthGrade}</Text>
           <Text dimColor> ({healthScore}/100)</Text>
@@ -705,7 +705,7 @@ function Row({ wide, width, children }: { wide: boolean; width: number; children
 function DashboardContent({ projects, period, columns, activeProvider, budgets, planUsages }: { projects: ProjectSummary[]; period: Period; columns?: number; activeProvider?: string; budgets?: Map<string, ContextBudget>; planUsages?: PlanUsage[] }) {
   const { dashWidth, wide, halfWidth, barWidth } = getLayout(columns)
   const isCursor = activeProvider === 'cursor'
-  if (projects.length === 0) return <Panel title="CodeBurn" color={ORANGE} width={dashWidth}><Text dimColor>No usage data found for {PERIOD_LABELS[period]}.</Text></Panel>
+  if (projects.length === 0) return <Panel title="DevSpend" color={ORANGE} width={dashWidth}><Text dimColor>No usage data found for {PERIOD_LABELS[period]}.</Text></Panel>
   const pw = wide ? halfWidth : dashWidth
   const days = period === 'all' ? undefined : (period === 'month' || period === '30days' ? 31 : 14)
   return (
@@ -944,8 +944,8 @@ function InteractiveDashboard({ initialProjects, initialPeriod, initialProvider,
               </Box>
             </Box>
           : view === 'optimize'
-            ? <Panel title="CodeBurn Optimize" color={ORANGE} width={dashWidth}><Text dimColor>Scanning {headerLabel}...</Text></Panel>
-            : <Panel title="CodeBurn" color={ORANGE} width={dashWidth}><Text dimColor>Loading {headerLabel}...</Text></Panel>}
+            ? <Panel title="DevSpend Optimize" color={ORANGE} width={dashWidth}><Text dimColor>Scanning {headerLabel}...</Text></Panel>
+            : <Panel title="DevSpend" color={ORANGE} width={dashWidth}><Text dimColor>Loading {headerLabel}...</Text></Panel>}
         {view !== 'compare' && <StatusBar width={dashWidth} showProvider={multipleProviders} view={view} findingCount={0} optimizeAvailable={false} compareAvailable={false} customRange={isCustomRange} />}
       </Box>
     )
