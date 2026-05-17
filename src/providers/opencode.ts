@@ -145,8 +145,8 @@ function warnUnrecognizedOpenCodeSchemaOnce(missing: string[]): void {
   if (warnedOpenCodeSchemas.has(key)) return
   warnedOpenCodeSchemas.add(key)
   process.stderr.write(
-    `codeburn: OpenCode database is missing expected tables (${missing.join(', ')}). ` +
-    `Run OpenCode once to apply migrations, or report at https://github.com/getagentseal/codeburn/issues if this persists on a current OpenCode install.\n`
+    `devspend: OpenCode database is missing expected tables (${missing.join(', ')}). ` +
+    `Run OpenCode once to apply migrations, or report at https://github.com/8harath/devspend/issues if this persists on a current OpenCode install.\n`
   )
 }
 
@@ -172,7 +172,7 @@ function createParser(
       try {
         db = openDatabase(dbPath)
       } catch (err) {
-        process.stderr.write(`codeburn: cannot open OpenCode database: ${err instanceof Error ? err.message : err}\n`)
+        process.stderr.write(`devspend: cannot open OpenCode database: ${err instanceof Error ? err.message : err}\n`)
         return
       }
 

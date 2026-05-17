@@ -153,7 +153,7 @@ function createParser(source: SessionSource, seenKeys: Set<string>): SessionPars
       try {
         db = openDatabase(dbPath)
       } catch (err) {
-        process.stderr.write(`codeburn: cannot open Goose database: ${err instanceof Error ? err.message : err}\n`)
+        process.stderr.write(`devspend: cannot open Goose database: ${err instanceof Error ? err.message : err}\n`)
         return
       }
 
