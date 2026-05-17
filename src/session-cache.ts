@@ -79,7 +79,7 @@ const PROVIDER_ENV_VARS: Record<string, string[]> = {
   opencode: ['XDG_DATA_HOME'],
   goose: ['XDG_DATA_HOME'],
   crush: ['XDG_DATA_HOME'],
-  antigravity: ['CODEBURN_CACHE_DIR'],
+  antigravity: ['DEVSPEND_CACHE_DIR'],
   qwen: ['QWEN_DATA_DIR'],
   'ibm-bob': ['XDG_CONFIG_HOME'],
 }
@@ -87,7 +87,7 @@ const PROVIDER_ENV_VARS: Record<string, string[]> = {
 // ── Cache Dir ──────────────────────────────────────────────────────────
 
 function getCacheDir(): string {
-  return process.env['CODEBURN_CACHE_DIR'] ?? join(homedir(), '.cache', 'codeburn')
+  return process.env['DEVSPEND_CACHE_DIR'] ?? join(homedir(), '.cache', 'devspend')
 }
 
 function getCachePath(): string {

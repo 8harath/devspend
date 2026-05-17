@@ -24,7 +24,7 @@ type ResultCache = {
 }
 
 function getCacheDir(): string {
-  return process.env['CODEBURN_CACHE_DIR'] ?? join(homedir(), '.cache', 'codeburn')
+  return process.env['DEVSPEND_CACHE_DIR'] ?? join(homedir(), '.cache', 'devspend')
 }
 
 function getCachePath(): string {
