@@ -1647,7 +1647,7 @@ function warnProviderReadFailureOnce(providerName: string, err: unknown): void {
   warnedProviderReadFailures.add(key)
   if (isSqliteBusyError(err)) {
     process.stderr.write(
-      `codeburn: skipped ${providerName} data because its SQLite database is temporarily locked; will retry on the next refresh.\n`
+      `devspend: skipped ${providerName} data because its SQLite database is temporarily locked; will retry on the next refresh.\n`
     )
   }
 }

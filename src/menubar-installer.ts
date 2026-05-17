@@ -180,14 +180,14 @@ async function resolvePersistentCodeburnPath(): Promise<string> {
   const path = await captureCommand('/usr/bin/env', [
     'PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin',
     'which',
-    'codeburn',
+    'devspend',
   ])
   if (!path.startsWith('/')) {
-    throw new Error('Resolved codeburn path is not absolute.')
+    throw new Error('Resolved devspend path is not absolute.')
   }
   if (path.includes('/_npx/') || path.includes('/.npm/_npx/')) {
     throw new Error(
-      'The menubar app needs a persistent codeburn command. Install CodeBurn globally first: npm install -g codeburn'
+      'The menubar app needs a persistent devspend command. Install DevSpend globally first: npm install -g devspend'
     )
   }
   return path
