@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.1.0] - 2026-05-18
+
+### Added
+- **`devspend dirs`** — token and cost breakdown by project directory. Shows input, output, and cache tokens, session count, and cost per directory, sorted by cost. Options: `--period`, `--provider`, `--sort cost/tokens/sessions`, `--top N`, `--format json`.
+
+### Changed
+- Forked from [CodeBurn](https://github.com/getagentseal/codeburn) (MIT). All user-facing strings, config paths, cache paths, and environment variables rebranded to `devspend`/`DEVSPEND`.
+- Package name: `codeburn` → `devspend`
+- Binary: `codeburn` → `devspend`
+- Config dir: `~/.config/codeburn` → `~/.config/devspend`
+- Cache dir: `~/.cache/codeburn` → `~/.cache/devspend`
+- Env vars: `CODEBURN_*` → `DEVSPEND_*`
+- Node.js minimum bumped to 22 (was 20)
+- Version reset to `0.1.0`
+
+---
+
+## Upstream history (CodeBurn, MIT licensed)
+
+Changes below this line are from the upstream CodeBurn project and are preserved for reference.
+
+---
+
 ## Unreleased
 
 ### Added (CLI)
