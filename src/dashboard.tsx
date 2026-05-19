@@ -38,15 +38,15 @@ const LANG_DISPLAY_NAMES: Record<string, string> = {
 }
 
 const PANEL_COLORS = {
-  overview: '#FF8C42',
-  daily: '#5B9EF5',
-  project: '#5BF5A0',
-  sessions: '#FF6B6B',
-  model: '#E05BF5',
-  activity: '#F5C85B',
-  tools: '#5BF5E0',
-  mcp: '#F55BE0',
-  bash: '#F5A05B',
+  overview: ACCENT,
+  daily: ACCENT,
+  project: ACCENT,
+  sessions: ACCENT,
+  model: ACCENT,
+  activity: ACCENT,
+  tools: ACCENT,
+  mcp: ACCENT,
+  bash: ACCENT,
 }
 
 const PROVIDER_COLORS: Record<string, string> = {
