@@ -21,9 +21,7 @@ type View = 'dashboard' | 'optimize' | 'compare'
 
 const MIN_WIDE = 90
 const ACCENT = '#00D4AA'
-const ORANGE = ACCENT
 const DIM = '#555555'
-const GOLD = ACCENT
 const PLAN_BAR_WIDTH = 10
 const HEAVY_PERIODS = new Set<Period>(['30days', 'month', 'all'])
 
@@ -76,7 +74,7 @@ const CATEGORY_COLORS: Record<TaskCategory, string> = {
   general: DIM,
 }
 
-const IMPACT_PANEL_COLORS: Record<string, string> = { high: '#F55B5B', medium: ORANGE, low: DIM }
+const IMPACT_PANEL_COLORS: Record<string, string> = { high: '#F55B5B', medium: ACCENT, low: DIM }
 
 function toHex(r: number, g: number, b: number): string {
   return '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('')
@@ -170,7 +168,7 @@ function planColor(planUsage: PlanUsage): string {
   return planUsage.status === 'over'
     ? '#F55B5B'
     : planUsage.status === 'near'
-      ? ORANGE
+      ? ACCENT
       : '#5BF58C'
 }
 
@@ -205,7 +203,7 @@ function Overview({ projects, label, width, planUsages }: { projects: ProjectSum
         <Text dimColor>  {label}</Text>
       </Text>
       <Text wrap="truncate-end">
-        <Text bold color={GOLD}>{formatCost(totalCost)}</Text>
+        <Text bold color={ACCENT}>{formatCost(totalCost)}</Text>
         <Text dimColor> cost   </Text>
         <Text bold>{totalCalls.toLocaleString()}</Text>
         <Text dimColor> calls   </Text>
@@ -263,7 +261,7 @@ function DailyActivity({ projects, days = 14, pw, bw }: { projects: ProjectSumma
         <Text key={day} wrap="truncate-end">
           <Text dimColor>{day.slice(5)} </Text>
           <HBar value={dailyCosts[day] ?? 0} max={maxCost} width={bw} />
-          <Text color={GOLD}>{formatCost(dailyCosts[day] ?? 0).padStart(8)}</Text>
+          <Text color={ACCENT}>{formatCost(dailyCosts[day] ?? 0).padStart(8)}</Text>
           <Text>{String(dailyCalls[day] ?? 0).padStart(6)}</Text>
         </Text>
       ))}
@@ -310,8 +308,8 @@ function ProjectBreakdown({ projects, pw, bw, budgets }: { projects: ProjectSumm
           <Text key={`${project.project}-${i}`} wrap="truncate-end">
             <HBar value={project.totalCostUSD} max={maxCost} width={bw} />
             <Text dimColor> {fit(shortProject(project.projectPath), nw)}</Text>
-            <Text color={GOLD}>{formatCost(project.totalCostUSD).padStart(8)}</Text>
-            <Text color={GOLD}>{avgCost.padStart(PROJECT_COL_AVG)}</Text>
+            <Text color={ACCENT}>{formatCost(project.totalCostUSD).padStart(8)}</Text>
+            <Text color={ACCENT}>{avgCost.padStart(PROJECT_COL_AVG)}</Text>
             <Text>{String(project.sessions.length).padStart(6)}</Text>
             {hasBudgets && <Text color="#7B9EF5">{(budget ? formatTokens(budget.total) : '-').padStart(10)}</Text>}
           </Text>
@@ -361,7 +359,7 @@ function ModelBreakdown({ projects, pw, bw }: { projects: ProjectSummary[]; pw: 
           <Text key={`${model}-${i}`} wrap="truncate-end">
             <HBar value={data.costUSD} max={maxCost} width={bw} />
             <Text> {fit(model, MODEL_NAME_WIDTH)}</Text>
-            <Text color={GOLD}>{formatCost(data.costUSD).padStart(MODEL_COL_COST)}</Text>
+            <Text color={ACCENT}>{formatCost(data.costUSD).padStart(MODEL_COL_COST)}</Text>
             <Text>{cacheLabel.padStart(MODEL_COL_CACHE)}</Text>
             <Text>{String(data.calls).padStart(MODEL_COL_CALLS)}</Text>
             <Text>{oneShotLabel.padStart(MODEL_COL_ONESHOT)}</Text>
@@ -407,9 +405,9 @@ function ActivityBreakdown({ projects, pw, bw }: { projects: ProjectSummary[]; p
           <Text key={cat} wrap="truncate-end">
             <HBar value={data.costUSD} max={maxCost} width={bw} />
             <Text color={CATEGORY_COLORS[cat as TaskCategory] ?? '#666666'}> {fit(CATEGORY_LABELS[cat as TaskCategory] ?? cat, 13)}</Text>
-            <Text color={GOLD}>{formatCost(data.costUSD).padStart(8)}</Text>
+            <Text color={ACCENT}>{formatCost(data.costUSD).padStart(8)}</Text>
             <Text>{String(data.turns).padStart(6)}</Text>
-            <Text color={data.editTurns === 0 ? DIM : oneShotPct === '100%' ? '#5BF58C' : ORANGE}>{String(oneShotPct).padStart(7)}</Text>
+            <Text color={data.editTurns === 0 ? DIM : oneShotPct === '100%' ? '#5BF58C' : ACCENT}>{String(oneShotPct).padStart(7)}</Text>
           </Text>,
         ]
         if (cat === 'general' && sortedSkills.length > 0) {
@@ -492,7 +490,7 @@ function TopSessions({ projects, pw, bw }: { projects: ProjectSummary[]; pw: num
           <Text key={`${session.sessionId}-${i}`} wrap="truncate-end">
             <HBar value={session.totalCostUSD} max={maxCost} width={bw} />
             <Text dimColor> {fit(label, nw - 1)}</Text>
-            <Text color={GOLD}>{formatCost(session.totalCostUSD).padStart(TOP_SESSIONS_COST_COL)}</Text>
+            <Text color={ACCENT}>{formatCost(session.totalCostUSD).padStart(TOP_SESSIONS_COST_COL)}</Text>
             <Text>{String(session.apiCalls).padStart(TOP_SESSIONS_CALLS_COL)}</Text>
           </Text>
         )
@@ -597,7 +595,7 @@ function FindingAction({ action }: { action: WasteAction }) {
   const header = actionDestinationHeader(action)
   return (
     <>
-      <Text color={ORANGE}>{header}</Text>
+      <Text color={ACCENT}>{header}</Text>
       <Text dimColor>{action.label}</Text>
       {lines.map((line, i) => <Text key={i} color="#5BF5E0">  {line}</Text>)}
     </>
@@ -619,14 +617,14 @@ function FindingPanel({ index, finding, costRate, width }: { index: number; find
         {trendBadge && <Text color="#5BF5A0">{trendBadge}</Text>}
       </Text>
       <Text dimColor wrap="wrap">{finding.explanation}</Text>
-      <Text color={GOLD}>Savings: ~{formatTokens(finding.tokensSaved)} tokens (~{formatCost(costSaved)})</Text>
+      <Text color={ACCENT}>Savings: ~{formatTokens(finding.tokensSaved)} tokens (~{formatCost(costSaved)})</Text>
       <Text> </Text>
       <FindingAction action={finding.fix} />
     </Box>
   )
 }
 
-const GRADE_COLORS: Record<string, string> = { A: '#5BF5A0', B: '#5BF5A0', C: GOLD, D: ORANGE, F: '#F55B5B' }
+const GRADE_COLORS: Record<string, string> = { A: '#5BF5A0', B: '#5BF5A0', C: ACCENT, D: ACCENT, F: '#F55B5B' }
 
 // Each finding panel takes ~6-8 lines. Show 3 at a time so the window fits a
 // 30-line terminal alongside the optimize header + status bar; users page
@@ -707,7 +705,7 @@ function Row({ wide, width, children }: { wide: boolean; width: number; children
 function DashboardContent({ projects, period, columns, activeProvider, budgets, planUsages }: { projects: ProjectSummary[]; period: Period; columns?: number; activeProvider?: string; budgets?: Map<string, ContextBudget>; planUsages?: PlanUsage[] }) {
   const { dashWidth, wide, halfWidth, barWidth } = getLayout(columns)
   const isCursor = activeProvider === 'cursor'
-  if (projects.length === 0) return <Panel title="DevSpend" color={ORANGE} width={dashWidth}><Text dimColor>No usage data found for {PERIOD_LABELS[period]}.</Text></Panel>
+  if (projects.length === 0) return <Panel title="DEVSPEND" width={dashWidth}><Text dimColor>No usage data found for {PERIOD_LABELS[period]}.</Text></Panel>
   const pw = wide ? halfWidth : dashWidth
   const days = period === 'all' ? undefined : (period === 'month' || period === '30days' ? 31 : 14)
   return (
@@ -971,7 +969,7 @@ function CustomRangeBanner({ label, width }: { label: string; width: number }) {
   return (
     <Box width={width} paddingX={1} marginBottom={1}>
       <Text dimColor>Custom range: </Text>
-      <Text color={ORANGE} bold>{label}</Text>
+      <Text color={ACCENT} bold>{label}</Text>
     </Box>
   )
 }
