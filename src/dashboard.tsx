@@ -647,9 +647,10 @@ function OptimizeView({ findings, costRate, projects, label, width, healthScore,
   const visible = findings.slice(start, end)
   return (
     <Box flexDirection="column" width={width}>
-      <Box flexDirection="column" borderStyle="round" borderColor={ORANGE} paddingX={1} width={width}>
+      <Box flexDirection="column" paddingX={1} width={width} marginBottom={1}>
+        <Text color={DIM}>{'─'.repeat(Math.max(0, width - 2))}</Text>
         <Text wrap="truncate-end">
-          <Text bold color={ORANGE}>DevSpend Optimize</Text>
+          <Text bold color={ACCENT}>DEVSPEND OPTIMIZE</Text>
           <Text dimColor>  {label}   Setup: </Text>
           <Text bold color={gradeColor}>{healthGrade}</Text>
           <Text dimColor> ({healthScore}/100)</Text>
@@ -938,15 +939,15 @@ function InteractiveDashboard({ initialProjects, initialPeriod, initialProvider,
         {isCustomRange && <CustomRangeBanner label={headerLabel} width={dashWidth} />}
         {view === 'compare'
           ? <Box flexDirection="column" paddingX={2} paddingY={1}>
-              <Box flexDirection="column" borderStyle="round" borderColor={ORANGE} paddingX={1}>
-                <Text bold color={ORANGE}>Model Comparison</Text>
-                <Text> </Text>
+              <Box flexDirection="column" paddingX={1}>
+                <Text bold color={ACCENT}>MODEL COMPARISON</Text>
+                <Text color={DIM}>{'─'.repeat(30)}</Text>
                 <Text dimColor>Loading {headerLabel} model data...</Text>
               </Box>
             </Box>
           : view === 'optimize'
-            ? <Panel title="DevSpend Optimize" color={ORANGE} width={dashWidth}><Text dimColor>Scanning {headerLabel}...</Text></Panel>
-            : <Panel title="DevSpend" color={ORANGE} width={dashWidth}><Text dimColor>Loading {headerLabel}...</Text></Panel>}
+            ? <Panel title="DEVSPEND OPTIMIZE" width={dashWidth}><Text dimColor>Scanning {headerLabel}...</Text></Panel>
+            : <Panel title="DEVSPEND" width={dashWidth}><Text dimColor>Loading {headerLabel}...</Text></Panel>}
         {view !== 'compare' && <StatusBar width={dashWidth} showProvider={multipleProviders} view={view} findingCount={0} optimizeAvailable={false} compareAvailable={false} customRange={isCustomRange} />}
       </Box>
     )
