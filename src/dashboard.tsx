@@ -20,9 +20,10 @@ import { patchStdoutForWindows } from './ink-win.js'
 type View = 'dashboard' | 'optimize' | 'compare'
 
 const MIN_WIDE = 90
-const ORANGE = '#FF8C42'
+const ACCENT = '#00D4AA'
+const ORANGE = ACCENT
 const DIM = '#555555'
-const GOLD = '#FFD700'
+const GOLD = ACCENT
 const PLAN_BAR_WIDTH = 10
 const HEAVY_PERIODS = new Set<Period>(['30days', 'month', 'all'])
 
