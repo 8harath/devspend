@@ -667,30 +667,31 @@ function OptimizeView({ findings, costRate, projects, label, width, healthScore,
 function StatusBar({ width, showProvider, view, findingCount, optimizeAvailable, compareAvailable, customRange }: { width: number; showProvider?: boolean; view?: View; findingCount?: number; optimizeAvailable?: boolean; compareAvailable?: boolean; customRange?: boolean }) {
   const isOptimize = view === 'optimize'
   return (
-    <Box borderStyle="round" borderColor={DIM} width={width} justifyContent="center" paddingX={1}>
+    <Box flexDirection="column" width={width} paddingX={1} marginTop={1}>
+      <Text color={DIM}>{'─'.repeat(Math.max(0, width - 2))}</Text>
       <Text>
         {isOptimize
-          ? <><Text color={ORANGE} bold>b</Text><Text dimColor> back   </Text><Text color={ORANGE} bold>j</Text><Text dimColor>/</Text><Text color={ORANGE} bold>k</Text><Text dimColor> scroll   </Text></>
+          ? <><Text color={ACCENT} bold>b</Text><Text dimColor> back   </Text><Text color={ACCENT} bold>j</Text><Text dimColor>/</Text><Text color={ACCENT} bold>k</Text><Text dimColor> scroll   </Text></>
           : !customRange
-            ? <><Text color={ORANGE} bold>{'<'}</Text><Text color={ORANGE}>{'>'}</Text><Text dimColor> switch   </Text></>
+            ? <><Text color={DIM}>← →  </Text></>
             : null}
-        <Text color={ORANGE} bold>q</Text><Text dimColor> quit</Text>
+        <Text color={ACCENT} bold>q</Text><Text dimColor> quit</Text>
         {!customRange && !isOptimize && (
           <>
-            <Text dimColor>   </Text><Text color={ORANGE} bold>1</Text><Text dimColor> today   </Text>
-            <Text color={ORANGE} bold>2</Text><Text dimColor> week   </Text>
-            <Text color={ORANGE} bold>3</Text><Text dimColor> 30 days   </Text>
-            <Text color={ORANGE} bold>4</Text><Text dimColor> month   </Text>
-            <Text color={ORANGE} bold>5</Text><Text dimColor> 6 months</Text>
+            <Text dimColor>   </Text><Text color={ACCENT} bold>1</Text><Text dimColor> today   </Text>
+            <Text color={ACCENT} bold>2</Text><Text dimColor> week   </Text>
+            <Text color={ACCENT} bold>3</Text><Text dimColor> 30d   </Text>
+            <Text color={ACCENT} bold>4</Text><Text dimColor> month   </Text>
+            <Text color={ACCENT} bold>5</Text><Text dimColor> 6mo</Text>
           </>
         )}
         {!isOptimize && optimizeAvailable && (
-          <><Text dimColor>   </Text><Text color={ORANGE} bold>o</Text><Text dimColor> optimize</Text>{findingCount != null && findingCount > 0 ? <Text color="#F55B5B"> ({findingCount})</Text> : null}</>
+          <><Text dimColor>   </Text><Text color={ACCENT} bold>o</Text><Text dimColor> optimize</Text>{findingCount != null && findingCount > 0 ? <Text color="#F55B5B"> ({findingCount})</Text> : null}</>
         )}
         {!isOptimize && compareAvailable && (
-          <><Text dimColor>   </Text><Text color={ORANGE} bold>c</Text><Text dimColor> compare</Text></>
+          <><Text dimColor>   </Text><Text color={ACCENT} bold>c</Text><Text dimColor> compare</Text></>
         )}
-        {showProvider && (<><Text dimColor>   </Text><Text color={ORANGE} bold>p</Text><Text dimColor> provider</Text></>)}
+        {showProvider && (<><Text dimColor>   </Text><Text color={ACCENT} bold>p</Text><Text dimColor> provider</Text></>)}
       </Text>
     </Box>
   )
