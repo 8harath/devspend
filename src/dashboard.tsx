@@ -549,16 +549,17 @@ function getProviderDisplayName(name: string): string { return PROVIDER_DISPLAY_
 
 function PeriodTabs({ active, providerName, showProvider }: { active: Period; providerName?: string; showProvider?: boolean }) {
   return (
-    <Box justifyContent="space-between" paddingX={1}>
-      <Box gap={1}>
-        {PERIODS.map(p => (
-          <Text key={p} bold={active === p} color={active === p ? ORANGE : DIM}>
-            {active === p ? `[ ${PERIOD_LABELS[p]} ]` : `  ${PERIOD_LABELS[p]}  `}
+    <Box justifyContent="space-between" paddingX={1} marginBottom={1}>
+      <Box gap={2}>
+        {PERIODS.map((p, i) => (
+          <Text key={p}>
+            <Text color={active === p ? ACCENT : DIM}>{i + 1}·</Text>
+            <Text bold={active === p} color={active === p ? 'white' : DIM}>{PERIOD_LABELS[p]}</Text>
           </Text>
         ))}
       </Box>
       {showProvider && providerName && (
-        <Box><Text color={DIM}>|  </Text><Text color={ORANGE} bold>[p]</Text><Text bold color={PROVIDER_COLORS[providerName] ?? ORANGE}> {getProviderDisplayName(providerName)}</Text></Box>
+        <Text><Text color={DIM}>p· </Text><Text bold color={ACCENT}>{getProviderDisplayName(providerName)}</Text></Text>
       )}
     </Box>
   )
