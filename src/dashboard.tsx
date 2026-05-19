@@ -136,10 +136,11 @@ function HBar({ value, max, width }: { value: number; max: number; width: number
 
 const PANEL_CHROME = 4
 
-function Panel({ title, color, children, width }: { title: string; color: string; children: React.ReactNode; width: number }) {
+function Panel({ title, children, width }: { title: string; color?: string; children: React.ReactNode; width: number }) {
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={color} paddingX={1} width={width} overflowX="hidden">
-      <Text bold color={color}>{title}</Text>
+    <Box flexDirection="column" paddingX={1} width={width} marginBottom={1}>
+      <Text bold color={ACCENT}>{title}</Text>
+      <Text color={DIM}>{'─'.repeat(Math.max(0, width - 2))}</Text>
       {children}
     </Box>
   )
