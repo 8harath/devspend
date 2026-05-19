@@ -61,19 +61,19 @@ const PROVIDER_COLORS: Record<string, string> = {
 }
 
 const CATEGORY_COLORS: Record<TaskCategory, string> = {
-  coding: '#5B9EF5',
-  debugging: '#F55B5B',
-  feature: '#5BF58C',
-  refactoring: '#F5E05B',
-  testing: '#E05BF5',
-  exploration: '#5BF5E0',
-  planning: '#7B9EF5',
-  delegation: '#F5C85B',
-  git: '#CCCCCC',
-  'build/deploy': '#5BF5A0',
-  conversation: '#888888',
-  brainstorming: '#F55BE0',
-  general: '#666666',
+  coding: ACCENT,
+  debugging: ACCENT,
+  feature: ACCENT,
+  refactoring: ACCENT,
+  testing: ACCENT,
+  exploration: ACCENT,
+  planning: ACCENT,
+  delegation: ACCENT,
+  git: DIM,
+  'build/deploy': ACCENT,
+  conversation: DIM,
+  brainstorming: ACCENT,
+  general: DIM,
 }
 
 const IMPACT_PANEL_COLORS: Record<string, string> = { high: '#F55B5B', medium: ORANGE, low: DIM }
