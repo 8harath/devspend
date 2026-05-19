@@ -199,9 +199,9 @@ function Overview({ projects, label, width, planUsages }: { projects: ProjectSum
   const activePlanUsages = planUsages ?? []
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={PANEL_COLORS.overview} paddingX={1} width={width}>
+    <Box flexDirection="column" paddingX={1} width={width} marginBottom={1}>
       <Text wrap="truncate-end">
-        <Text bold color={ORANGE}>DevSpend</Text>
+        <Text bold color={ACCENT}>DEVSPEND</Text>
         <Text dimColor>  {label}</Text>
       </Text>
       <Text wrap="truncate-end">
