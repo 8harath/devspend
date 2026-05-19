@@ -50,14 +50,14 @@ const PANEL_COLORS = {
 }
 
 const PROVIDER_COLORS: Record<string, string> = {
-  claude: '#FF8C42',
-  codex: '#5BF5A0',
-  cursor: '#00B4D8',
-  'ibm-bob': '#0F62FE',
-  opencode: '#A78BFA',
-  pi: '#F472B6',
-  kimi: '#B6E34A',
-  all: '#FF8C42',
+  claude: ACCENT,
+  codex: ACCENT,
+  cursor: ACCENT,
+  'ibm-bob': ACCENT,
+  opencode: ACCENT,
+  pi: ACCENT,
+  kimi: ACCENT,
+  all: ACCENT,
 }
 
 const CATEGORY_COLORS: Record<TaskCategory, string> = {
