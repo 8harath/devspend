@@ -610,7 +610,8 @@ function FindingPanel({ index, finding, costRate, width }: { index: number; find
   const label = finding.impact.charAt(0).toUpperCase() + finding.impact.slice(1)
   const trendBadge = finding.trend === 'improving' ? ' improving \u2193' : ''
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={color} paddingX={1} width={width}>
+    <Box flexDirection="column" paddingX={1} width={width} marginBottom={1}>
+      <Text color={DIM}>{'─'.repeat(Math.max(0, width - 2))}</Text>
       <Text wrap="truncate-end">
         <Text bold>{index}. {finding.title}</Text>
         <Text>  </Text>
