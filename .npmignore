@@ -1,0 +1,17 @@
+src/
+tests/
+scripts/
+docs/
+mac/
+gnome/
+assets/
+.github/
+*.md
+!README.md
+tsup.config.ts
+tsconfig.json
+vitest.config.*
+.eslintrc*
+.prettierrc*
+HOW_IT_WORKS.md
+STATUSLINE_EXPLAINED.md

@@ -9,12 +9,6 @@ import { getAllProviders } from './providers/index.js'
 import type { ProjectSummary, DateRange } from './types.js'
 import { patchStdoutForWindows } from './ink-win.js'
 
-const ORANGE = '#FF8C42'
-const GREEN = '#5BF5A0'
-const DIM = '#888888'
-const GOLD = '#FFD700'
-const BAR_A = '#6495ED'
-const BAR_B = '#5BF5A0'
 const LOW_DATA_THRESHOLD = 20
 const LABEL_WIDTH = 20
 const VALUE_WIDTH = 14
@@ -95,9 +89,9 @@ function ModelSelector({ models, onSelect, onBack }: ModelSelectorProps) {
   return (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
       <Box flexDirection="column" borderStyle="round" borderColor={ORANGE} paddingX={1}>
-        <Text bold color={ORANGE}>Model Comparison</Text>
+        <Text bold >Model Comparison</Text>
         <Text> </Text>
-        <Text color={DIM}>Select two models to compare:</Text>
+        <Text dimColor>Select two models to compare:</Text>
         <Text> </Text>
         {models.map((m, i) => {
           const isCursor = i === cursor
@@ -111,20 +105,20 @@ function ModelSelector({ models, onSelect, onBack }: ModelSelectorProps) {
                 {shortName(m.model).padEnd(MODEL_NAME_COL)}
               </Text>
               <Text>{m.calls.toLocaleString().padStart(8)} calls</Text>
-              <Text color={GOLD}>{formatCost(m.cost).padStart(10)}</Text>
-              {isSelected && <Text color={GREEN}>   [selected]</Text>}
-              {lowData && <Text color={DIM}>   low data</Text>}
+              <Text >{formatCost(m.cost).padStart(10)}</Text>
+              {isSelected && <Text >   [selected]</Text>}
+              {lowData && <Text dimColor>   low data</Text>}
             </Text>
           )
         })}
       </Box>
       <Text> </Text>
       <Text>
-        <Text color={ORANGE} bold>[space]</Text><Text dimColor> select  </Text>
-        <Text color={ORANGE} bold>[enter]</Text><Text dimColor> compare  </Text>
-        <Text color={ORANGE} bold>{'<>'}</Text><Text dimColor> switch period  </Text>
-        <Text color={ORANGE} bold>[esc]</Text><Text dimColor> back  </Text>
-        <Text color={ORANGE} bold>[q]</Text><Text dimColor> quit</Text>
+        <Text  bold>[space]</Text><Text dimColor> select  </Text>
+        <Text  bold>[enter]</Text><Text dimColor> compare  </Text>
+        <Text  bold>{'<>'}</Text><Text dimColor> switch period  </Text>
+        <Text  bold>[esc]</Text><Text dimColor> back  </Text>
+        <Text  bold>[q]</Text><Text dimColor> quit</Text>
       </Text>
     </Box>
   )
@@ -142,7 +136,7 @@ type ComparisonResultsProps = {
 function MetricPanel({ title, rows, nameA, nameB, pw }: { title: string; rows: ComparisonRow[]; nameA: string; nameB: string; pw: number }) {
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={ORANGE} paddingX={1} width={pw}>
-      <Text bold color={ORANGE}>{title}</Text>
+      <Text bold >{title}</Text>
       <Text>
         <Text>{''.padEnd(LABEL_WIDTH)}</Text>
         <Text bold>{nameA.padStart(VALUE_WIDTH)}</Text>
@@ -153,7 +147,7 @@ function MetricPanel({ title, rows, nameA, nameB, pw }: { title: string; rows: C
         const fmtB = formatValue(row.valueB, row.formatFn)
         return (
           <Text key={row.label}>
-            <Text color={DIM}>{row.label.padEnd(LABEL_WIDTH)}</Text>
+            <Text dimColor>{row.label.padEnd(LABEL_WIDTH)}</Text>
             <Text color={row.winner === 'a' ? GREEN : undefined}>{fmtA.padStart(VALUE_WIDTH)}</Text>
             <Text color={row.winner === 'b' ? GREEN : undefined}>{fmtB.padStart(VALUE_WIDTH)}</Text>
           </Text>
@@ -166,7 +160,7 @@ function MetricPanel({ title, rows, nameA, nameB, pw }: { title: string; rows: C
 function ContextPanel({ title, rows, nameA, nameB, pw, lowDataWarning }: { title: string; rows: { label: string; valueA: string; valueB: string }[]; nameA: string; nameB: string; pw: number; lowDataWarning?: string }) {
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={ORANGE} paddingX={1} width={pw}>
-      <Text bold color={ORANGE}>{title}</Text>
+      <Text bold >{title}</Text>
       <Text>
         <Text>{''.padEnd(LABEL_WIDTH)}</Text>
         <Text bold>{nameA.padStart(VALUE_WIDTH)}</Text>
@@ -174,12 +168,12 @@ function ContextPanel({ title, rows, nameA, nameB, pw, lowDataWarning }: { title
       </Text>
       {rows.map(row => (
         <Text key={row.label}>
-          <Text color={DIM}>{row.label.padEnd(LABEL_WIDTH)}</Text>
-          <Text color={DIM}>{row.valueA.padStart(VALUE_WIDTH)}</Text>
-          <Text color={DIM}>{row.valueB.padStart(VALUE_WIDTH)}</Text>
+          <Text dimColor>{row.label.padEnd(LABEL_WIDTH)}</Text>
+          <Text dimColor>{row.valueA.padStart(VALUE_WIDTH)}</Text>
+          <Text dimColor>{row.valueB.padStart(VALUE_WIDTH)}</Text>
         </Text>
       ))}
-      {lowDataWarning && <Text color={GOLD}>{lowDataWarning}</Text>}
+      {lowDataWarning && <Text >{lowDataWarning}</Text>}
     </Box>
   )
 }
@@ -238,9 +232,9 @@ function ComparisonResults({ modelA, modelB, rows, categories, workingStyle, onB
     <Box flexDirection="column" paddingX={2} paddingY={1}>
       <Box flexDirection="column" borderStyle="round" borderColor={ORANGE} paddingX={1} width={dashWidth}>
         <Text>
-          <Text bold color={ORANGE}>{nameA}</Text>
+          <Text bold >{nameA}</Text>
           <Text dimColor>  vs  </Text>
-          <Text bold color={ORANGE}>{nameB}</Text>
+          <Text bold >{nameB}</Text>
         </Text>
       </Box>
 
@@ -251,13 +245,13 @@ function ComparisonResults({ modelA, modelB, rows, categories, workingStyle, onB
 
       {categories.length > 0 && (
         <Box flexDirection="column" borderStyle="round" borderColor={ORANGE} paddingX={1} width={dashWidth}>
-          <Text bold color={ORANGE}>Category Head-to-Head</Text>
-          <Text color={DIM}>one-shot rate per category</Text>
+          <Text bold >Category Head-to-Head</Text>
+          <Text dimColor>one-shot rate per category</Text>
           <Text>
             <Text>{'  '}</Text>
-            <Text color={BAR_A}>{FULL_BLOCK + FULL_BLOCK}</Text>
+            <Text >{FULL_BLOCK + FULL_BLOCK}</Text>
             <Text> {nameA}    </Text>
-            <Text color={BAR_B}>{FULL_BLOCK + FULL_BLOCK}</Text>
+            <Text >{FULL_BLOCK + FULL_BLOCK}</Text>
             <Text> {nameB}</Text>
           </Text>
           {categories.map(cat => {
@@ -271,20 +265,20 @@ function ComparisonResults({ modelA, modelB, rows, categories, workingStyle, onB
             return (
               <React.Fragment key={cat.category}>
                 <Text> </Text>
-                <Text color={DIM}>{'  '}{cat.category}</Text>
+                <Text dimColor>{'  '}{cat.category}</Text>
                 <Text>
                   <Text>{'  '}</Text>
-                  <Text color={BAR_A}>{FULL_BLOCK.repeat(Math.max(bwA, 1))}</Text>
+                  <Text >{FULL_BLOCK.repeat(Math.max(bwA, 1))}</Text>
                   <Text>{' '.repeat(Math.max(0, BAR_MAX_WIDTH - bwA))} </Text>
                   <Text color={cat.winner === 'a' ? GREEN : undefined}>{rateA.padStart(6)}</Text>
-                  <Text color={DIM}> {turnsA}</Text>
+                  <Text dimColor> {turnsA}</Text>
                 </Text>
                 <Text>
                   <Text>{'  '}</Text>
-                  <Text color={BAR_B}>{FULL_BLOCK.repeat(Math.max(bwB, 1))}</Text>
+                  <Text >{FULL_BLOCK.repeat(Math.max(bwB, 1))}</Text>
                   <Text>{' '.repeat(Math.max(0, BAR_MAX_WIDTH - bwB))} </Text>
                   <Text color={cat.winner === 'b' ? GREEN : undefined}>{rateB.padStart(6)}</Text>
-                  <Text color={DIM}> {turnsB}</Text>
+                  <Text dimColor> {turnsB}</Text>
                 </Text>
               </React.Fragment>
             )
@@ -300,9 +294,9 @@ function ComparisonResults({ modelA, modelB, rows, categories, workingStyle, onB
       </Box>
 
       <Text>
-        <Text color={ORANGE} bold>{'<>'}</Text><Text dimColor> switch period  </Text>
-        <Text color={ORANGE} bold>[esc]</Text><Text dimColor> back  </Text>
-        <Text color={ORANGE} bold>[q]</Text><Text dimColor> quit</Text>
+        <Text  bold>{'<>'}</Text><Text dimColor> switch period  </Text>
+        <Text  bold>[esc]</Text><Text dimColor> back  </Text>
+        <Text  bold>[q]</Text><Text dimColor> quit</Text>
       </Text>
     </Box>
   )
@@ -414,14 +408,14 @@ export function CompareView({ projects, onBack }: CompareViewProps) {
     return (
       <Box flexDirection="column" paddingX={2} paddingY={1}>
         <Box flexDirection="column" borderStyle="round" borderColor={ORANGE} paddingX={1}>
-          <Text bold color={ORANGE}>Model Comparison</Text>
+          <Text bold >Model Comparison</Text>
           <Text> </Text>
-          <Text color={DIM}>Need at least 2 models to compare. Found {models.length}.</Text>
+          <Text dimColor>Need at least 2 models to compare. Found {models.length}.</Text>
         </Box>
         <Text> </Text>
         <Text>
-          <Text color={ORANGE} bold>[esc]</Text><Text dimColor> back  </Text>
-          <Text color={ORANGE} bold>[q]</Text><Text dimColor> quit</Text>
+          <Text  bold>[esc]</Text><Text dimColor> back  </Text>
+          <Text  bold>[q]</Text><Text dimColor> quit</Text>
         </Text>
       </Box>
     )
@@ -436,9 +430,9 @@ export function CompareView({ projects, onBack }: CompareViewProps) {
     return (
       <Box flexDirection="column" paddingX={2} paddingY={1}>
         <Box flexDirection="column" borderStyle="round" borderColor={ORANGE} paddingX={1}>
-          <Text bold color={ORANGE}>Model Comparison</Text>
+          <Text bold >Model Comparison</Text>
           <Text> </Text>
-          <Text color={DIM}>Scanning self-corrections...</Text>
+          <Text dimColor>Scanning self-corrections...</Text>
         </Box>
       </Box>
     )

@@ -15,12 +15,6 @@ import { formatTokens } from './format.js'
 // Display constants
 // ============================================================================
 
-const ORANGE = '#FF8C42'
-const DIM = '#666666'
-const GOLD = '#FFD700'
-const CYAN = '#5BF5E0'
-const GREEN = '#5BF5A0'
-const RED = '#F55B5B'
 
 // ============================================================================
 // Token estimation constants
@@ -1831,8 +1825,6 @@ export async function scanAndDetect(
 
 const PANEL_WIDTH = 62
 const SEP = '\u2500'
-const IMPACT_COLORS: Record<Impact, string> = { high: RED, medium: ORANGE, low: DIM }
-const GRADE_COLORS: Record<HealthGrade, string> = { A: GREEN, B: GREEN, C: GOLD, D: ORANGE, F: RED }
 
 function wrap(text: string, width: number, indent: string): string {
   const words = text.split(' ')
@@ -1886,16 +1878,16 @@ function renderFinding(n: number, f: WasteFinding, costRate: number): string[] {
   const titlePad = PANEL_WIDTH - f.title.length - impactLabel.length - trendBadge.length - 8
   const pad = titlePad > 0 ? ' ' + SEP.repeat(titlePad) + ' ' : '  '
 
-  lines.push(chalk.hex(DIM)(`  ${SEP}${SEP}${SEP} `) +
+  lines.push(chalk.dim(`  ${SEP}${SEP}${SEP} `) +
     chalk.bold(`${n}. ${f.title}`) +
-    chalk.hex(DIM)(pad) +
-    chalk.hex(IMPACT_COLORS[f.impact])(impactLabel) +
-    (trendBadge ? chalk.hex(GREEN)(trendBadge) : '') +
-    chalk.hex(DIM)(` ${SEP}${SEP}${SEP}`))
+    chalk.dim(pad) +
+    chalk.dim(impactLabel) +
+    (trendBadge ? chalk.bold(trendBadge) : '') +
+    chalk.dim(` ${SEP}${SEP}${SEP}`))
   lines.push('')
   lines.push(wrap(f.explanation, PANEL_WIDTH - 4, '  '))
   lines.push('')
-  lines.push(chalk.hex(GOLD)(`  Potential savings: ${savings}`))
+  lines.push(chalk.bold(`  Potential savings: ${savings}`))
   lines.push('')
 
   // Destination header — issue #277. Tells the user where each suggestion
@@ -1903,14 +1895,14 @@ function renderFinding(n: number, f: WasteFinding, costRate: number): string[] {
   // permanent rules and one-time prompts are no longer interchangeable in
   // the output.
   const a = f.fix
-  lines.push(chalk.hex(ORANGE)(`  ${renderActionHeader(a)}`))
-  lines.push(chalk.hex(DIM)(`  ${a.label}`))
+  lines.push(chalk(`  ${renderActionHeader(a)}`))
+  lines.push(chalk.dim(`  ${a.label}`))
   if (a.type === 'file-content') {
-    for (const line of a.content.split('\n')) lines.push(chalk.hex(CYAN)(`    ${line}`))
+    for (const line of a.content.split('\n')) lines.push(chalk(`    ${line}`))
   } else if (a.type === 'command') {
-    for (const line of a.text.split('\n')) lines.push(chalk.hex(CYAN)(`    ${line}`))
+    for (const line of a.text.split('\n')) lines.push(chalk(`    ${line}`))
   } else {
-    for (const line of a.text.split('\n')) lines.push(chalk.hex(CYAN)(`    ${line}`))
+    for (const line of a.text.split('\n')) lines.push(chalk(`    ${line}`))
   }
   lines.push('')
   return lines
@@ -1928,20 +1920,20 @@ function renderOptimize(
 ): string {
   const lines: string[] = []
   lines.push('')
-  lines.push(`  ${chalk.bold.hex(ORANGE)('DevSpend config health')}${chalk.dim('  ' + periodLabel)}`)
-  lines.push(chalk.hex(DIM)('  ' + SEP.repeat(PANEL_WIDTH)))
+  lines.push(`  ${chalk.bold('DevSpend config health')}${chalk.dim('  ' + periodLabel)}`)
+  lines.push(chalk.dim('  ' + SEP.repeat(PANEL_WIDTH)))
 
   const issueSuffix = findings.length > 0 ? `, ${findings.length} issue${findings.length > 1 ? 's' : ''}` : ''
   lines.push('  ' + [
     `${sessionCount} sessions`,
     `${callCount.toLocaleString()} calls`,
-    chalk.hex(GOLD)(formatCost(periodCost)),
-    `Health: ${chalk.bold.hex(GRADE_COLORS[healthGrade])(healthGrade)}${chalk.dim(` (${healthScore}/100${issueSuffix})`)}`,
-  ].join(chalk.hex(DIM)('   ')))
+    chalk.bold(formatCost(periodCost)),
+    `Health: ${chalk.bold(healthGrade)}${chalk.dim(` (${healthScore}/100${issueSuffix})`)}`,
+  ].join(chalk.dim('   ')))
   lines.push('')
 
   if (findings.length === 0) {
-    lines.push(chalk.hex(GREEN)('  Nothing to fix. Your setup is lean.'))
+    lines.push(chalk.bold('  Nothing to fix. Your setup is lean.'))
     lines.push('')
     lines.push(chalk.dim('  DevSpend optimize scans your Claude Code sessions and config for'))
     lines.push(chalk.dim('  token waste: junk directory reads, duplicate file reads, unused'))
@@ -1956,14 +1948,14 @@ function renderOptimize(
   const pct = pctRaw >= 1 ? pctRaw.toFixed(0) : pctRaw.toFixed(1)
 
   const costText = costRate > 0 ? ` (~${formatCost(totalCost)}, ~${pct}% of spend)` : ''
-  lines.push(chalk.hex(GREEN)(`  Potential savings: ~${formatTokens(totalTokens)} tokens${costText}`))
+  lines.push(chalk.bold(`  Potential savings: ~${formatTokens(totalTokens)} tokens${costText}`))
   lines.push('')
 
   for (let i = 0; i < findings.length; i++) {
     lines.push(...renderFinding(i + 1, findings[i], costRate))
   }
 
-  lines.push(chalk.hex(DIM)('  ' + SEP.repeat(PANEL_WIDTH)))
+  lines.push(chalk.dim('  ' + SEP.repeat(PANEL_WIDTH)))
   lines.push(chalk.dim('  Estimates only.'))
   lines.push('')
   return lines.join('\n')

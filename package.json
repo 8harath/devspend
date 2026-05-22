@@ -1,6 +1,6 @@
 {
   "name": "devspend",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "See where your AI coding tokens go - by task, tool, model, and project",
   "type": "module",
   "main": "./dist/cli.js",
@@ -11,8 +11,8 @@
     "dist"
   ],
   "scripts": {
-    "bundle-litellm": "node scripts/bundle-litellm.mjs",
-    "build": "node scripts/bundle-litellm.mjs && tsup && node -e \"const fs=require('fs'); fs.copyFileSync('src/cli.ts','dist/cli.js'); fs.chmodSync('dist/cli.js',0o755)\"",
+    "build": "tsup && node scripts/postbuild.mjs",
+    "update-pricing": "node scripts/bundle-litellm.mjs",
     "dev": "tsx src/cli.ts",
     "test": "vitest",
     "prepublishOnly": "npm run build"

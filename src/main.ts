@@ -1160,4 +1160,193 @@ program
     console.log(formatYieldSummary(summary))
   })
 
+program
+  .command('burn-rate')
+  .description('Show daily spend rate, trend, and projected monthly cost')
+  .option('-p, --period <period>', 'Analysis period: week, 30days, month, all', 'week')
+  .option('--provider <provider>', 'Filter by provider', 'all')
+  .action(async (opts) => {
+    await loadPricing()
+    const { range, label } = getDateRange(opts.period)
+    const projects = await parseAllSessions(range, opts.provider)
+
+    const dailyCosts: Record<string, number> = {}
+    for (const project of projects) {
+      for (const session of project.sessions) {
+        for (const turn of session.turns) {
+          const ts = turn.timestamp || turn.assistantCalls[0]?.timestamp
+          if (!ts) continue
+          const day = dateKey(ts)
+          for (const call of turn.assistantCalls) {
+            dailyCosts[day] = (dailyCosts[day] ?? 0) + call.costUSD
+          }
+        }
+      }
+    }
+
+    const days = Object.keys(dailyCosts).sort()
+    if (days.length === 0) {
+      console.log('\n  No usage data found for this period.\n')
+      return
+    }
+
+    const total = Object.values(dailyCosts).reduce((s, c) => s + c, 0)
+    const avg = total / days.length
+    const half = Math.floor(days.length / 2)
+    const firstHalfAvg = half > 0
+      ? days.slice(0, half).reduce((s, d) => s + (dailyCosts[d] ?? 0), 0) / half
+      : avg
+    const secondHalfAvg = days.length - half > 0
+      ? days.slice(half).reduce((s, d) => s + (dailyCosts[d] ?? 0), 0) / (days.length - half)
+      : avg
+    const trend = secondHalfAvg > firstHalfAvg * 1.05 ? '↑ increasing' : secondHalfAvg < firstHalfAvg * 0.95 ? '↓ decreasing' : '→ stable'
+    const maxDaily = Math.max(...Object.values(dailyCosts))
+    const BAR_W = 24
+
+    console.log(`\n  Burn Rate  ·  ${label}\n`)
+    console.log(`  ${'Average daily'.padEnd(22)}${formatCost(avg)}`)
+    console.log(`  ${'Trend'.padEnd(22)}${trend}`)
+    console.log(`  ${'Projected 30 days'.padEnd(22)}${formatCost(avg * 30)}`)
+    console.log(`  ${'Total for period'.padEnd(22)}${formatCost(total)}`)
+    console.log(`  ${'Active days'.padEnd(22)}${days.length}`)
+    console.log()
+    console.log(`  ${'Date'.padEnd(6)}  ${''.padEnd(BAR_W)}  Cost`)
+    console.log(`  ${'─'.repeat(6 + 2 + BAR_W + 2 + 8)}`)
+    for (const day of days) {
+      const cost = dailyCosts[day] ?? 0
+      const filled = maxDaily > 0 ? Math.round((cost / maxDaily) * BAR_W) : 0
+      const bar = '▓'.repeat(filled) + '░'.repeat(BAR_W - filled)
+      console.log(`  ${day.slice(5)}  ${bar}  ${formatCost(cost)}`)
+    }
+    console.log()
+  })
+
+program
+  .command('digest')
+  .description('Generate a shareable text or markdown summary of your AI spend')
+  .option('-p, --period <period>', 'Analysis period: today, week, 30days, month', 'week')
+  .option('--provider <provider>', 'Filter by provider', 'all')
+  .option('--format <format>', 'Output format: text, markdown', 'text')
+  .action(async (opts) => {
+    assertFormat(opts.format, ['text', 'markdown'], 'digest')
+    await loadPricing()
+    const { range, label } = getDateRange(opts.period)
+    const projects = filterProjectsByName(await parseAllSessions(range, opts.provider), [], [])
+
+    const allSessions = projects.flatMap(p => p.sessions)
+    const totalCost = projects.reduce((s, p) => s + p.totalCostUSD, 0)
+    const totalCalls = projects.reduce((s, p) => s + p.totalApiCalls, 0)
+    const totalSessions = allSessions.length
+    const totalCacheRead = allSessions.reduce((s, sess) => s + sess.totalCacheReadTokens, 0)
+    const totalInput = allSessions.reduce((s, sess) => s + sess.totalInputTokens, 0)
+    const cacheHit = totalInput + totalCacheRead > 0 ? (totalCacheRead / (totalInput + totalCacheRead)) * 100 : 0
+
+    const md = opts.format === 'markdown'
+    const h2 = (t: string) => md ? `\n## ${t}\n` : `\n  ${t.toUpperCase()}\n  ${'─'.repeat(t.length)}`
+    const li = (k: string, v: string) => md ? `- **${k}:** ${v}` : `  ${k.padEnd(22)}${v}`
+
+    if (md) {
+      console.log(`# DevSpend: ${label}\n`)
+    } else {
+      console.log(`\n  DevSpend digest  ·  ${label}`)
+    }
+
+    console.log(h2('Overview'))
+    console.log(li('Total cost', formatCost(totalCost)))
+    console.log(li('API calls', totalCalls.toLocaleString()))
+    console.log(li('Sessions', String(totalSessions)))
+    console.log(li('Cache hit rate', `${cacheHit.toFixed(1)}%`))
+
+    if (projects.length > 0) {
+      console.log(h2('Top Projects'))
+      for (const p of projects.slice(0, 5)) {
+        console.log(li(shortProject(p.projectPath), `${formatCost(p.totalCostUSD)}  (${p.sessions.length} sessions)`))
+      }
+    }
+
+    const modelMap: Record<string, number> = {}
+    for (const sess of allSessions) {
+      for (const [model, d] of Object.entries(sess.modelBreakdown)) {
+        modelMap[model] = (modelMap[model] ?? 0) + d.costUSD
+      }
+    }
+    const topModels = Object.entries(modelMap).sort(([, a], [, b]) => b - a).slice(0, 4)
+    if (topModels.length > 0) {
+      console.log(h2('Top Models'))
+      for (const [model, cost] of topModels) {
+        console.log(li(model, formatCost(cost)))
+      }
+    }
+
+    const catMap: Record<string, number> = {}
+    for (const sess of allSessions) {
+      for (const [cat, d] of Object.entries(sess.categoryBreakdown)) {
+        catMap[cat] = (catMap[cat] ?? 0) + d.costUSD
+      }
+    }
+    const topCats = Object.entries(catMap).sort(([, a], [, b]) => b - a).slice(0, 6)
+    if (topCats.length > 0) {
+      console.log(h2('By Activity'))
+      for (const [cat, cost] of topCats) {
+        console.log(li(CATEGORY_LABELS[cat as TaskCategory] ?? cat, formatCost(cost)))
+      }
+    }
+    console.log()
+  })
+
+program
+  .command('top')
+  .description('Show the most expensive sessions or days')
+  .option('-n, --count <n>', 'Number of items to show', '10')
+  .option('--by <metric>', 'Rank by: sessions, days', 'sessions')
+  .option('-p, --period <period>', 'Analysis period: today, week, 30days, month, all', 'all')
+  .option('--provider <provider>', 'Filter by provider', 'all')
+  .action(async (opts) => {
+    await loadPricing()
+    const { range, label } = getDateRange(opts.period)
+    const projects = await parseAllSessions(range, opts.provider)
+    const n = Math.max(1, parseInt(opts.count, 10) || 10)
+
+    console.log()
+
+    if (opts.by === 'days') {
+      const dailyCosts: Record<string, number> = {}
+      for (const project of projects) {
+        for (const session of project.sessions) {
+          for (const turn of session.turns) {
+            const ts = turn.timestamp || turn.assistantCalls[0]?.timestamp
+            if (!ts) continue
+            const day = dateKey(ts)
+            for (const call of turn.assistantCalls) {
+              dailyCosts[day] = (dailyCosts[day] ?? 0) + call.costUSD
+            }
+          }
+        }
+      }
+      const sorted = Object.entries(dailyCosts).sort(([, a], [, b]) => b - a).slice(0, n)
+      if (sorted.length === 0) { console.log('  No data found.\n'); return }
+      console.log(`  Top ${n} days  ·  ${label}\n`)
+      console.log(`  ${'Date'.padEnd(12)}${'Cost'.padStart(10)}`)
+      console.log(`  ${'─'.repeat(22)}`)
+      for (const [day, cost] of sorted) {
+        console.log(`  ${day.padEnd(12)}${formatCost(cost).padStart(10)}`)
+      }
+    } else {
+      const allSessions = projects
+        .flatMap(p => p.sessions.map(s => ({ ...s, projectPath: p.projectPath })))
+        .sort((a, b) => b.totalCostUSD - a.totalCostUSD)
+        .slice(0, n)
+      if (allSessions.length === 0) { console.log('  No sessions found.\n'); return }
+      console.log(`  Top ${n} sessions  ·  ${label}\n`)
+      console.log(`  ${'Date'.padEnd(11)}${'Project'.padEnd(30)}${'Cost'.padStart(10)}${'Calls'.padStart(7)}`)
+      console.log(`  ${'─'.repeat(58)}`)
+      for (const s of allSessions) {
+        const date = s.firstTimestamp ? s.firstTimestamp.slice(0, 10) : '----------'
+        const proj = shortProject(s.projectPath).slice(0, 28)
+        console.log(`  ${date.padEnd(11)}${proj.padEnd(30)}${formatCost(s.totalCostUSD).padStart(10)}${String(s.apiCalls).padStart(7)}`)
+      }
+    }
+    console.log()
+  })
+
 program.parse()
