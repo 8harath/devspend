@@ -19,6 +19,17 @@ export type PlanConfig = Omit<Plan, 'provider' | 'setAt'> & Partial<Pick<Plan, '
 export type PlanConfigMap = Partial<Record<PlanProvider, PlanConfig>>
 export type PlanMap = Partial<Record<PlanProvider, Plan>>
 
+export type AlertConfig = {
+  dailyUsd?: number
+  weeklyUsd?: number
+  webhook?: string
+}
+
+export type BudgetEntry = {
+  monthlyUsd: number
+  setAt: string
+}
+
 export type CodeburnConfig = {
   currency?: {
     code: string
@@ -27,6 +38,8 @@ export type CodeburnConfig = {
   plan?: Plan
   plans?: PlanConfigMap
   modelAliases?: Record<string, string>
+  alerts?: AlertConfig
+  budgets?: Record<string, BudgetEntry>
 }
 
 function getConfigDir(): string {

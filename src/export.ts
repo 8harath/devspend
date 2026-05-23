@@ -1,5 +1,8 @@
 import { writeFile, mkdir, readdir, open, stat, rm } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
+import { createRequire } from 'node:module'
+
+const _requireSqlite = createRequire(import.meta.url)
 
 import { CATEGORY_LABELS, type ProjectSummary, type TaskCategory } from './types.js'
 import { getCurrency, convertCost, roundForActiveCurrency } from './currency.js'
@@ -386,5 +389,113 @@ export async function exportJson(periods: PeriodExport[], outputPath: string): P
   }
   await mkdir(dirname(target), { recursive: true })
   await writeFile(target, JSON.stringify(data, null, 2), 'utf-8')
+  return target
+}
+
+export async function exportSqlite(periods: PeriodExport[], outputPath: string): Promise<string> {
+  type WriteDb = {
+    prepare(sql: string): { run(...params: unknown[]): unknown; get(...params: unknown[]): Record<string, unknown> | undefined }
+    exec(sql: string): void
+    close(): void
+  }
+  const { DatabaseSync } = _requireSqlite('node:sqlite') as { DatabaseSync: new (path: string) => WriteDb }
+
+  const target = resolve(outputPath.toLowerCase().endsWith('.sqlite') ? outputPath : `${outputPath}.sqlite`)
+
+  const existing = await stat(target).catch(() => null)
+  if (existing?.isFile()) {
+    let isOurs = false
+    try {
+      type ReadDb = { prepare(sql: string): { get(...p: unknown[]): Record<string, unknown> | undefined }; close(): void }
+      const { DatabaseSync: RDb } = _requireSqlite('node:sqlite') as { DatabaseSync: new (p: string, o?: { readOnly: boolean }) => ReadDb }
+      const rdb = new RDb(target, { readOnly: true })
+      const row = rdb.prepare('SELECT value FROM meta WHERE key = ?').get('schema') as { value?: string } | undefined
+      rdb.close()
+      isOurs = typeof row?.value === 'string' && row.value.startsWith('devspend.export.')
+    } catch { /* not a valid SQLite file */ }
+    if (!isOurs) {
+      throw new Error(`Refusing to overwrite ${target}: file does not look like a devspend export. Delete it manually or pick a different -o path.`)
+    }
+    await rm(target)
+  }
+  if (existing?.isDirectory()) {
+    throw new Error(`Refusing to overwrite directory at ${target}. Pass a file path instead.`)
+  }
+
+  await mkdir(dirname(target), { recursive: true })
+  const db = new DatabaseSync(target)
+
+  db.exec(`
+    CREATE TABLE sessions (
+      session_id TEXT PRIMARY KEY, project TEXT, project_path TEXT,
+      first_timestamp TEXT, last_timestamp TEXT, total_cost_usd REAL,
+      api_calls INTEGER, turn_count INTEGER, period TEXT
+    );
+    CREATE TABLE turns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT,
+      timestamp TEXT, category TEXT, retries INTEGER, has_edits INTEGER,
+      cost_usd REAL, input_tokens INTEGER, output_tokens INTEGER,
+      cache_read_tokens INTEGER, cache_write_tokens INTEGER
+    );
+    CREATE TABLE daily_summary (
+      date TEXT, period TEXT, cost_usd REAL, api_calls INTEGER, sessions INTEGER,
+      input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
+      cache_write_tokens INTEGER, PRIMARY KEY (date, period)
+    );
+    CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+  `)
+
+  db.prepare("INSERT INTO meta VALUES ('schema', 'devspend.export.v1')").run()
+  db.prepare("INSERT INTO meta VALUES ('generated', ?)").run(new Date().toISOString())
+
+  const iSess = db.prepare(
+    'INSERT OR REPLACE INTO sessions (session_id,project,project_path,first_timestamp,last_timestamp,total_cost_usd,api_calls,turn_count,period) VALUES (?,?,?,?,?,?,?,?,?)'
+  )
+  const iTurn = db.prepare(
+    'INSERT INTO turns (session_id,timestamp,category,retries,has_edits,cost_usd,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens) VALUES (?,?,?,?,?,?,?,?,?,?)'
+  )
+  const iDay = db.prepare(
+    'INSERT OR REPLACE INTO daily_summary (date,period,cost_usd,api_calls,sessions,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens) VALUES (?,?,?,?,?,?,?,?,?)'
+  )
+
+  for (const { label: period, projects } of periods) {
+    const dailyMap: Record<string, { cost: number; calls: number; sessions: Set<string>; inp: number; out: number; cr: number; cw: number }> = {}
+
+    for (const project of projects) {
+      for (const session of project.sessions) {
+        iSess.run(
+          session.sessionId, project.project, project.projectPath ?? null,
+          session.firstTimestamp, session.lastTimestamp, session.totalCostUSD,
+          session.apiCalls, session.turns.length, period
+        )
+        for (const turn of session.turns) {
+          const cost = turn.assistantCalls.reduce((s, c) => s + c.costUSD, 0)
+          const inp  = turn.assistantCalls.reduce((s, c) => s + c.usage.inputTokens, 0)
+          const out  = turn.assistantCalls.reduce((s, c) => s + c.usage.outputTokens, 0)
+          const cr   = turn.assistantCalls.reduce((s, c) => s + c.usage.cacheReadInputTokens, 0)
+          const cw   = turn.assistantCalls.reduce((s, c) => s + c.usage.cacheCreationInputTokens, 0)
+          iTurn.run(session.sessionId, turn.timestamp ?? null, turn.category, turn.retries, turn.hasEdits ? 1 : 0, cost, inp, out, cr, cw)
+          const ts = turn.timestamp || turn.assistantCalls[0]?.timestamp
+          if (ts) {
+            const day = dateKey(ts)
+            if (!dailyMap[day]) dailyMap[day] = { cost: 0, calls: 0, sessions: new Set(), inp: 0, out: 0, cr: 0, cw: 0 }
+            dailyMap[day].sessions.add(session.sessionId)
+            dailyMap[day].cost += cost
+            dailyMap[day].calls += turn.assistantCalls.length
+            dailyMap[day].inp += inp
+            dailyMap[day].out += out
+            dailyMap[day].cr += cr
+            dailyMap[day].cw += cw
+          }
+        }
+      }
+    }
+
+    for (const [date, d] of Object.entries(dailyMap)) {
+      iDay.run(date, period, d.cost, d.calls, d.sessions.size, d.inp, d.out, d.cr, d.cw)
+    }
+  }
+
+  db.close()
   return target
 }

@@ -1,6 +1,6 @@
 import { Command } from 'commander'
 import { installMenubarApp } from './menubar-installer.js'
-import { exportCsv, exportJson, type PeriodExport } from './export.js'
+import { exportCsv, exportJson, exportSqlite, type PeriodExport } from './export.js'
 import { loadPricing, setModelAliases } from './models.js'
 import { parseAllSessions, filterProjectsByName, filterProjectsByDateRange, clearSessionCache } from './parser.js'
 import { convertCost } from './currency.js'
@@ -17,6 +17,7 @@ import { runOptimize, scanAndDetect } from './optimize.js'
 import { renderCompare } from './compare.js'
 import { getAllProviders } from './providers/index.js'
 import { clearPlan, readConfig, readPlan, readPlans, saveConfig, savePlan, getConfigFilePath, type Plan, type PlanId, type PlanProvider } from './config.js'
+import { runGit } from './yield.js'
 import { clampResetDay, getPlanUsageOrNull, getPlanUsages, type PlanUsage } from './plan-usage.js'
 import { getPresetPlan, isPlanId, isPlanProvider, PLAN_IDS, PLAN_PROVIDERS, planDisplayName } from './plans.js'
 import { createRequire } from 'node:module'
@@ -632,7 +633,7 @@ program
 program
   .command('export')
   .description('Export usage data to CSV or JSON')
-  .option('-f, --format <format>', 'Export format: csv, json', 'csv')
+  .option('-f, --format <format>', 'Export format: csv, json, sqlite', 'csv')
   .option('-o, --output <path>', 'Output file path')
   .option('--from <date>', 'Start date (YYYY-MM-DD). Exports a single custom period when set')
   .option('--to <date>', 'End date (YYYY-MM-DD). Exports a single custom period when set')
@@ -640,7 +641,7 @@ program
   .option('--project <name>', 'Show only projects matching name (repeatable)', collect, [])
   .option('--exclude <name>', 'Exclude projects matching name (repeatable)', collect, [])
   .action(async (opts) => {
-    assertFormat(opts.format, ['csv', 'json'], 'export')
+    assertFormat(opts.format, ['csv', 'json', 'sqlite'], 'export')
     await loadPricing()
     const pf = opts.provider
     const fp = (p: ProjectSummary[]) => filterProjectsByName(p, opts.project, opts.exclude)
@@ -679,6 +680,8 @@ program
     try {
       if (opts.format === 'json') {
         savedPath = await exportJson(periods, outputPath)
+      } else if (opts.format === 'sqlite') {
+        savedPath = await exportSqlite(periods, outputPath)
       } else {
         savedPath = await exportCsv(periods, outputPath)
       }
@@ -1346,6 +1349,447 @@ program
         console.log(`  ${date.padEnd(11)}${proj.padEnd(30)}${formatCost(s.totalCostUSD).padStart(10)}${String(s.apiCalls).padStart(7)}`)
       }
     }
+    console.log()
+  })
+
+program
+  .command('ci')
+  .description('Exit 1 if AI spend exceeds configured thresholds (for CI pipelines)')
+  .option('--max-cost <usd>', 'Max allowed cost in USD', parseFloat)
+  .option('--max-tokens <n>', 'Max allowed total tokens', parseInteger)
+  .option('-p, --period <period>', 'Period to check: today, week, 30days', 'today')
+  .option('--provider <provider>', 'Filter by provider', 'all')
+  .option('--format <format>', 'Output format: text, json', 'text')
+  .action(async (opts) => {
+    assertFormat(opts.format, ['text', 'json'], 'ci')
+    await loadPricing()
+    const { range, label } = getDateRange(opts.period)
+    const projects = await parseAllSessions(range, opts.provider)
+    const sessions = projects.flatMap(p => p.sessions)
+    const totalCost = projects.reduce((s, p) => s + p.totalCostUSD, 0)
+    const totalCalls = projects.reduce((s, p) => s + p.totalApiCalls, 0)
+    const totalTokens = sessions.reduce((s, sess) =>
+      s + sess.totalInputTokens + sess.totalOutputTokens + sess.totalCacheReadTokens + sess.totalCacheWriteTokens, 0)
+
+    const breaches: string[] = []
+    if (opts.maxCost !== undefined && totalCost > opts.maxCost) {
+      breaches.push(`cost ${formatCost(totalCost)} exceeds limit ${formatCost(opts.maxCost)}`)
+    }
+    if (opts.maxTokens !== undefined && totalTokens > opts.maxTokens) {
+      breaches.push(`tokens ${totalTokens.toLocaleString()} exceeds limit ${opts.maxTokens.toLocaleString()}`)
+    }
+
+    const passed = breaches.length === 0
+    if (opts.format === 'json') {
+      console.log(JSON.stringify({
+        passed, period: label, cost: totalCost, calls: totalCalls, tokens: totalTokens,
+        maxCost: opts.maxCost ?? null, maxTokens: opts.maxTokens ?? null, breaches,
+      }, null, 2))
+    } else {
+      console.log(`\n  CI Gate  ·  ${label}`)
+      console.log(`  ${'Cost'.padEnd(22)}${formatCost(totalCost)}${opts.maxCost !== undefined ? `  (limit: ${formatCost(opts.maxCost)})` : ''}`)
+      console.log(`  ${'Tokens'.padEnd(22)}${formatTokens(totalTokens)}${opts.maxTokens !== undefined ? `  (limit: ${formatTokens(opts.maxTokens)})` : ''}`)
+      console.log(`  ${'Status'.padEnd(22)}${passed ? 'PASS' : 'FAIL'}`)
+      if (!passed) { console.log(); for (const b of breaches) console.error(`  ${b}`) }
+      console.log()
+    }
+    if (!passed) process.exit(1)
+  })
+
+program
+  .command('alert [action]')
+  .description('Manage daily/weekly spend alert thresholds')
+  .option('--daily <usd>', 'Daily spend threshold in USD', parseFloat)
+  .option('--weekly <usd>', 'Weekly spend threshold in USD', parseFloat)
+  .option('--webhook <url>', 'Webhook URL to POST when a threshold is breached')
+  .action(async (action?: string, opts?: { daily?: number; weekly?: number; webhook?: string }) => {
+    const mode = action ?? 'show'
+
+    if (mode === 'set') {
+      if (opts?.daily === undefined && opts?.weekly === undefined) {
+        console.error('\n  Provide at least --daily or --weekly.\n')
+        process.exitCode = 1; return
+      }
+      const config = await readConfig()
+      config.alerts = {
+        ...(config.alerts ?? {}),
+        ...(opts?.daily !== undefined ? { dailyUsd: opts.daily } : {}),
+        ...(opts?.weekly !== undefined ? { weeklyUsd: opts.weekly } : {}),
+        ...(opts?.webhook !== undefined ? { webhook: opts.webhook } : {}),
+      }
+      await saveConfig(config)
+      console.log('\n  Alert thresholds saved:')
+      if (config.alerts.dailyUsd) console.log(`  Daily:  $${config.alerts.dailyUsd}`)
+      if (config.alerts.weeklyUsd) console.log(`  Weekly: $${config.alerts.weeklyUsd}`)
+      if (config.alerts.webhook) console.log(`  Webhook: ${config.alerts.webhook}`)
+      console.log(`  Config: ${getConfigFilePath()}\n`)
+      return
+    }
+
+    if (mode === 'clear') {
+      const config = await readConfig()
+      delete config.alerts
+      await saveConfig(config)
+      console.log('\n  Alert thresholds cleared.\n')
+      return
+    }
+
+    if (mode === 'check') {
+      await loadPricing()
+      const config = await readConfig()
+      const alerts = config.alerts ?? {}
+      if (!alerts.dailyUsd && !alerts.weeklyUsd) {
+        console.log('\n  No alert thresholds set. Use: devspend alert set --daily <usd>\n')
+        return
+      }
+      const breaches: string[] = []
+      console.log()
+      if (alerts.dailyUsd) {
+        const todayProjects = await parseAllSessions(getDateRange('today').range, 'all')
+        const todayCost = todayProjects.reduce((s, p) => s + p.totalCostUSD, 0)
+        clearSessionCache()
+        if (todayCost > alerts.dailyUsd) {
+          breaches.push(`Daily spend ${formatCost(todayCost)} exceeds limit ${formatCost(alerts.dailyUsd)}`)
+        } else {
+          console.log(`  Daily:  ${formatCost(todayCost)} / $${alerts.dailyUsd} — OK`)
+        }
+      }
+      if (alerts.weeklyUsd) {
+        const weekProjects = await parseAllSessions(getDateRange('week').range, 'all')
+        const weekCost = weekProjects.reduce((s, p) => s + p.totalCostUSD, 0)
+        if (weekCost > alerts.weeklyUsd) {
+          breaches.push(`Weekly spend ${formatCost(weekCost)} exceeds limit ${formatCost(alerts.weeklyUsd)}`)
+        } else {
+          console.log(`  Weekly: ${formatCost(weekCost)} / $${alerts.weeklyUsd} — OK`)
+        }
+      }
+      if (breaches.length > 0) {
+        console.log()
+        for (const breach of breaches) console.error(`  ALERT: ${breach}`)
+        if (alerts.webhook) {
+          try {
+            await fetch(alerts.webhook, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ breaches, timestamp: new Date().toISOString() }),
+            })
+          } catch { /* webhook failure is non-fatal */ }
+        }
+        process.exitCode = 1
+      } else {
+        console.log('  All thresholds OK.')
+      }
+      console.log()
+      return
+    }
+
+    const config = await readConfig()
+    const alerts = config.alerts ?? {}
+    if (!alerts.dailyUsd && !alerts.weeklyUsd) {
+      console.log('\n  No alert thresholds configured.')
+      console.log('  Use: devspend alert set --daily <usd>\n')
+      return
+    }
+    console.log('\n  Alert thresholds:')
+    if (alerts.dailyUsd) console.log(`  Daily:  $${alerts.dailyUsd}`)
+    if (alerts.weeklyUsd) console.log(`  Weekly: $${alerts.weeklyUsd}`)
+    if (alerts.webhook) console.log(`  Webhook: ${alerts.webhook}`)
+    console.log(`  Config: ${getConfigFilePath()}\n`)
+  })
+
+program
+  .command('since <ref>')
+  .description('Show AI spend since a git ref, commit, or tag')
+  .option('--provider <provider>', 'Filter by provider', 'all')
+  .option('--format <format>', 'Output format: text, json', 'text')
+  .action(async (ref: string, opts) => {
+    assertFormat(opts.format, ['text', 'json'], 'since')
+    if (!ref.trim() || /[\0\n\r\t ]/.test(ref)) {
+      console.error('\n  Invalid git ref.\n'); process.exit(1)
+    }
+    const refTime = runGit(['log', '-1', '--format=%aI', ref], process.cwd())
+    if (!refTime) {
+      console.error(`\n  Could not resolve git ref "${ref}". Are you in a git repository with that ref?\n`)
+      process.exit(1)
+    }
+    await loadPricing()
+    const start = new Date(refTime)
+    const range: DateRange = { start, end: new Date() }
+    const projects = await parseAllSessions(range, opts.provider)
+    const sessions = projects.flatMap(p => p.sessions)
+    const totalCost = projects.reduce((s, p) => s + p.totalCostUSD, 0)
+    const totalCalls = projects.reduce((s, p) => s + p.totalApiCalls, 0)
+    const totalInput = sessions.reduce((s, sess) => s + sess.totalInputTokens, 0)
+    const totalOutput = sessions.reduce((s, sess) => s + sess.totalOutputTokens, 0)
+    const label = `since ${ref}  (${start.toISOString().slice(0, 16).replace('T', ' ')} UTC)`
+    if (opts.format === 'json') {
+      console.log(JSON.stringify({
+        ref, since: refTime, cost: totalCost, calls: totalCalls,
+        sessions: sessions.length, inputTokens: totalInput, outputTokens: totalOutput,
+        projects: projects.map(p => ({ name: p.project, cost: p.totalCostUSD })),
+      }, null, 2))
+      return
+    }
+    console.log(`\n  ${label}\n`)
+    console.log(`  ${'Total cost'.padEnd(22)}${formatCost(totalCost)}`)
+    console.log(`  ${'API calls'.padEnd(22)}${totalCalls.toLocaleString()}`)
+    console.log(`  ${'Sessions'.padEnd(22)}${sessions.length}`)
+    console.log(`  ${'Input tokens'.padEnd(22)}${formatTokens(totalInput)}`)
+    console.log(`  ${'Output tokens'.padEnd(22)}${formatTokens(totalOutput)}`)
+    if (projects.length > 0) {
+      console.log()
+      for (const p of projects.slice(0, 10)) {
+        console.log(`  ${shortProject(p.projectPath || p.project).slice(0, 28).padEnd(30)}${formatCost(p.totalCostUSD)}`)
+      }
+    }
+    console.log()
+  })
+
+program
+  .command('tasks')
+  .description('Ranked list of task categories by cost')
+  .option('-p, --period <period>', 'Analysis period: today, week, 30days, month, all', 'week')
+  .option('--provider <provider>', 'Filter by provider', 'all')
+  .option('--top <n>', 'Show top N task categories', (v: string) => parseInt(v, 10))
+  .option('--format <format>', 'Output format: text, json', 'text')
+  .action(async (opts) => {
+    assertFormat(opts.format, ['text', 'json'], 'tasks')
+    await loadPricing()
+    const { range, label } = getDateRange(opts.period)
+    const projects = await parseAllSessions(range, opts.provider)
+
+    const catMap: Record<string, { cost: number; turns: number; editTurns: number; oneShotTurns: number }> = {}
+    for (const project of projects) {
+      for (const session of project.sessions) {
+        for (const [cat, d] of Object.entries(session.categoryBreakdown)) {
+          if (!catMap[cat]) catMap[cat] = { cost: 0, turns: 0, editTurns: 0, oneShotTurns: 0 }
+          catMap[cat].cost += d.costUSD
+          catMap[cat].turns += d.turns
+          catMap[cat].editTurns += d.editTurns
+          catMap[cat].oneShotTurns += d.oneShotTurns
+        }
+      }
+    }
+
+    const totalCost = Object.values(catMap).reduce((s, d) => s + d.cost, 0)
+    let rows = Object.entries(catMap)
+      .sort(([, a], [, b]) => b.cost - a.cost)
+      .map(([cat, d]) => ({
+        category: CATEGORY_LABELS[cat as TaskCategory] ?? cat,
+        cost: d.cost,
+        turns: d.turns,
+        oneShotRate: d.editTurns > 0 ? Math.round((d.oneShotTurns / d.editTurns) * 100) : null,
+        share: totalCost > 0 ? Math.round((d.cost / totalCost) * 100) : 0,
+      }))
+    if (opts.top) rows = rows.slice(0, opts.top)
+
+    if (opts.format === 'json') {
+      console.log(JSON.stringify({ period: label, totalCost, tasks: rows }, null, 2))
+      return
+    }
+    if (rows.length === 0) { console.log('\n  No task data found.\n'); return }
+
+    const CAT_W = Math.min(Math.max(...rows.map(r => r.category.length), 12), 30)
+    console.log(`\n  Tasks  ·  ${label}\n`)
+    console.log(`  ${'Category'.padEnd(CAT_W)}  ${'Cost'.padStart(10)}  ${'Share'.padStart(6)}  ${'Turns'.padStart(6)}  ${'1-shot%'.padStart(7)}`)
+    console.log(`  ${'─'.repeat(CAT_W + 36)}`)
+    for (const r of rows) {
+      const os = r.oneShotRate !== null ? `${r.oneShotRate}%` : '─'
+      console.log(`  ${r.category.padEnd(CAT_W)}  ${formatCost(r.cost).padStart(10)}  ${`${r.share}%`.padStart(6)}  ${String(r.turns).padStart(6)}  ${os.padStart(7)}`)
+    }
+    console.log()
+  })
+
+program
+  .command('budget [action] [project] [amount]')
+  .description('Manage per-project monthly budget caps')
+  .action(async (action?: string, project?: string, amount?: string) => {
+    const mode = action ?? 'status'
+
+    if (mode === 'set') {
+      if (!project || !amount) {
+        console.error('\n  Usage: devspend budget set <project> <amount-usd>\n')
+        process.exitCode = 1; return
+      }
+      const monthlyUsd = parseFloat(amount)
+      if (!Number.isFinite(monthlyUsd) || monthlyUsd <= 0) {
+        console.error(`\n  Amount must be a positive number; got "${amount}".\n`)
+        process.exitCode = 1; return
+      }
+      const config = await readConfig()
+      config.budgets = config.budgets ?? {}
+      config.budgets[project] = { monthlyUsd, setAt: new Date().toISOString() }
+      await saveConfig(config)
+      console.log(`\n  Budget set: ${project} → $${monthlyUsd}/month`)
+      console.log(`  Config: ${getConfigFilePath()}\n`)
+      return
+    }
+
+    if (mode === 'clear') {
+      const config = await readConfig()
+      if (project) {
+        if (!config.budgets?.[project]) {
+          console.error(`\n  No budget found for "${project}".\n`)
+          process.exitCode = 1; return
+        }
+        delete config.budgets![project]
+        if (Object.keys(config.budgets!).length === 0) delete config.budgets
+        await saveConfig(config)
+        console.log(`\n  Budget cleared for "${project}".\n`)
+      } else {
+        delete config.budgets
+        await saveConfig(config)
+        console.log('\n  All budgets cleared.\n')
+      }
+      return
+    }
+
+    const config = await readConfig()
+    const budgets = config.budgets ?? {}
+    if (Object.keys(budgets).length === 0) {
+      console.log('\n  No budgets configured.')
+      console.log('  Use: devspend budget set <project> <amount>\n')
+      return
+    }
+    await loadPricing()
+    const monthProjects = await parseAllSessions(getDateRange('month').range, 'all')
+    let anyOver = false
+    const N = 30
+    console.log('\n  Budget Status  ·  this month\n')
+    console.log(`  ${'Project'.padEnd(N)}  ${'Budget'.padStart(10)}  ${'Spent'.padStart(10)}  ${'Status'.padStart(8)}`)
+    console.log(`  ${'─'.repeat(N + 32)}`)
+    for (const [proj, budget] of Object.entries(budgets)) {
+      const match = monthProjects.find(p => p.project === proj || (p.projectPath && p.projectPath.includes(proj)))
+      const spent = match?.totalCostUSD ?? 0
+      const status = spent > budget.monthlyUsd ? 'OVER' : spent > budget.monthlyUsd * 0.8 ? 'NEAR' : 'OK'
+      if (status === 'OVER') anyOver = true
+      console.log(`  ${proj.slice(0, N - 2).padEnd(N)}  ${formatCost(budget.monthlyUsd).padStart(10)}  ${formatCost(spent).padStart(10)}  ${status.padStart(8)}`)
+    }
+    console.log()
+    if (anyOver) process.exitCode = 1
+  })
+
+program
+  .command('watch')
+  .description('Live cost ticker — polls the active session every N seconds')
+  .option('--interval <seconds>', 'Poll interval in seconds (min 5)', '30')
+  .option('--provider <provider>', 'Filter by provider', 'all')
+  .action(async (opts) => {
+    const interval = Math.max(5, parseInt(opts.interval, 10) || 30) * 1000
+    await loadPricing()
+
+    const render = async () => {
+      clearSessionCache()
+      const now = new Date()
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const range: DateRange = { start: todayStart, end: now }
+      const projects = await parseAllSessions(range, opts.provider)
+      const sessions = projects.flatMap(p => p.sessions)
+      const totalCost = projects.reduce((s, p) => s + p.totalCostUSD, 0)
+      const totalCalls = projects.reduce((s, p) => s + p.totalApiCalls, 0)
+      process.stdout.write('\x1b[2J\x1b[0;0H')
+      console.log(`  devspend watch  ·  ${now.toLocaleTimeString()}  ·  Ctrl+C to stop`)
+      console.log()
+      console.log(`  ${'Today cost'.padEnd(22)}${formatCost(totalCost)}`)
+      console.log(`  ${'API calls'.padEnd(22)}${totalCalls.toLocaleString()}`)
+      console.log(`  ${'Sessions'.padEnd(22)}${sessions.length}`)
+      console.log()
+      if (projects.length > 0) {
+        const W = 30
+        console.log(`  ${'Project'.padEnd(W)}  ${'Cost'.padStart(10)}`)
+        console.log(`  ${'─'.repeat(W + 12)}`)
+        for (const p of projects.slice(0, 10)) {
+          console.log(`  ${shortProject(p.projectPath || p.project).slice(0, W - 2).padEnd(W)}  ${formatCost(p.totalCostUSD).padStart(10)}`)
+        }
+        console.log()
+      }
+      console.log(`  Next update in ${interval / 1000}s`)
+    }
+
+    await render()
+    const timer = setInterval(render, interval)
+    process.on('SIGINT', () => {
+      clearInterval(timer)
+      console.log('\n\n  Stopped.\n')
+      process.exit(0)
+    })
+    await new Promise<never>(() => {})
+  })
+
+program
+  .command('diff')
+  .description('Compare AI spend across two time windows')
+  .option('-p, --period <period>', 'Period for window A: today, week, 30days, month', 'week')
+  .option('--from <date>', 'Window A start (YYYY-MM-DD)')
+  .option('--to <date>', 'Window A end (YYYY-MM-DD)')
+  .option('--compare-from <date>', 'Window B start (YYYY-MM-DD)')
+  .option('--compare-to <date>', 'Window B end (YYYY-MM-DD)')
+  .option('--provider <provider>', 'Filter by provider', 'all')
+  .option('--format <format>', 'Output format: text, json', 'text')
+  .action(async (opts) => {
+    assertFormat(opts.format, ['text', 'json'], 'diff')
+    await loadPricing()
+
+    let rangeA: DateRange, labelA: string
+    if (opts.from || opts.to) {
+      const r = parseDateRangeFlags(opts.from, opts.to)
+      if (!r) { console.error('\n  Invalid --from/--to dates.\n'); process.exit(1) }
+      rangeA = r
+      labelA = formatDateRangeLabel(opts.from ?? '', opts.to ?? '')
+    } else {
+      const d = getDateRange(opts.period)
+      rangeA = d.range; labelA = d.label
+    }
+
+    let rangeB: DateRange, labelB: string
+    if (opts.compareFrom || opts.compareTo) {
+      const r = parseDateRangeFlags(opts.compareFrom, opts.compareTo)
+      if (!r) { console.error('\n  Invalid --compare-from/--compare-to dates.\n'); process.exit(1) }
+      rangeB = r
+      labelB = formatDateRangeLabel(opts.compareFrom ?? '', opts.compareTo ?? '')
+    } else {
+      const dur = rangeA.end.getTime() - rangeA.start.getTime()
+      rangeB = { start: new Date(rangeA.start.getTime() - dur), end: new Date(rangeA.start.getTime()) }
+      labelB = `prev ${opts.period}`
+    }
+
+    const [projectsA, projectsB] = await Promise.all([
+      parseAllSessions(rangeA, opts.provider),
+      parseAllSessions(rangeB, opts.provider),
+    ])
+
+    const agg = (ps: ProjectSummary[]) => {
+      const sess = ps.flatMap(p => p.sessions)
+      const cost = ps.reduce((s, p) => s + p.totalCostUSD, 0)
+      const calls = ps.reduce((s, p) => s + p.totalApiCalls, 0)
+      const inp = sess.reduce((s, ss) => s + ss.totalInputTokens, 0)
+      const cr = sess.reduce((s, ss) => s + ss.totalCacheReadTokens, 0)
+      return { cost, calls, sessions: sess.length, cacheHit: inp + cr > 0 ? (cr / (inp + cr)) * 100 : 0 }
+    }
+    const a = agg(projectsA), b = agg(projectsB)
+
+    const pctDelta = (curr: number, prev: number) => {
+      if (prev === 0) return curr > 0 ? '+inf' : '─'
+      const p = ((curr - prev) / prev) * 100
+      return (p >= 0 ? '+' : '') + p.toFixed(1) + '%'
+    }
+
+    if (opts.format === 'json') {
+      console.log(JSON.stringify({ a: { label: labelA, ...a }, b: { label: labelB, ...b } }, null, 2))
+      return
+    }
+
+    const COL = 13, LBL = 20
+    const la = labelA.slice(0, COL), lb = labelB.slice(0, COL)
+    console.log(`\n  Diff  ·  ${labelA}  vs  ${labelB}\n`)
+    console.log(`  ${''.padEnd(LBL)}  ${la.padStart(COL)}  ${lb.padStart(COL)}  ${'Change'.padStart(10)}`)
+    console.log(`  ${'─'.repeat(LBL + 2 + COL + 2 + COL + 2 + 10)}`)
+    const row = (lbl: string, va: string, vb: string, d: string) =>
+      console.log(`  ${lbl.padEnd(LBL)}  ${va.padStart(COL)}  ${vb.padStart(COL)}  ${d.padStart(10)}`)
+    row('Cost', formatCost(a.cost), formatCost(b.cost), pctDelta(a.cost, b.cost))
+    row('API Calls', a.calls.toLocaleString(), b.calls.toLocaleString(), pctDelta(a.calls, b.calls))
+    row('Sessions', String(a.sessions), String(b.sessions), pctDelta(a.sessions, b.sessions))
+    row('Cache hit rate', `${a.cacheHit.toFixed(1)}%`, `${b.cacheHit.toFixed(1)}%`, pctDelta(a.cacheHit, b.cacheHit))
     console.log()
   })
 

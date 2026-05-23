@@ -20,9 +20,9 @@ export type YieldSummary = {
   details: SessionYield[]
 }
 
-const SAFE_REF_PATTERN = /^[A-Za-z0-9._/\-]+$/
+export const SAFE_REF_PATTERN = /^[A-Za-z0-9._/\-]+$/
 
-function runGit(args: string[], cwd: string): string | null {
+export function runGit(args: string[], cwd: string): string | null {
   try {
     return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
   } catch {
