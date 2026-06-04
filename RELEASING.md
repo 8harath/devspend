@@ -85,7 +85,7 @@ The tag is for human reference and to anchor the GitHub Release. No workflow run
 ### 5. Verify npm Publication
 
 ```bash
-npm view codeburn version
+npm view devspend version
 ```
 
 ### 6. Create a GitHub Release
@@ -138,7 +138,7 @@ No manual action is needed; the workflow handles everything.
 
 ### 4. Verify the Release
 
-After the workflow completes, the GitHub Release page shows the zip and sha256 files. The installed CLI command `codeburn menubar --force` fetches the newest `mac-v*` menubar release that includes both assets, verifies the checksum and bundle identity, and installs it into `~/Applications`.
+After the workflow completes, the GitHub Release page shows the zip and sha256 files. The installed CLI command `devspend menubar --force` fetches the newest `mac-v*` menubar release that includes both assets, verifies the checksum and bundle identity, and installs it into `~/Applications`.
 
 ## Homebrew Tap Update
 
@@ -149,16 +149,16 @@ The Homebrew tap lives at `https://github.com/getagentseal/homebrew-codeburn`. A
 When the CLI is published to npm, get its download URL and SHA-256 hash:
 
 ```bash
-npm view codeburn@0.9.8 dist.tarball
-npm view codeburn@0.9.8 dist.shasum
+npm view devspend@0.9.8 dist.tarball
+npm view devspend@0.9.8 dist.shasum
 ```
 
-This returns a URL like `https://registry.npmjs.org/codeburn/-/codeburn-0.9.8.tgz` and a SHA-256 hash.
+This returns a URL like `https://registry.npmjs.org/devspend/-/devspend-0.9.8.tgz` and a SHA-256 hash.
 
 Alternatively, compute the hash yourself:
 
 ```bash
-curl -sL https://registry.npmjs.org/codeburn/-/codeburn-0.9.8.tgz | shasum -a 256
+curl -sL https://registry.npmjs.org/devspend/-/devspend-0.9.8.tgz | shasum -a 256
 ```
 
 ### 2. Update the Formula
@@ -168,8 +168,8 @@ Edit `Formula/codeburn.rb` in the homebrew-codeburn tap:
 ```ruby
 class Codeburn < Formula
   desc "See where your AI coding tokens go"
-  homepage "https://github.com/getagentseal/codeburn"
-  url "https://registry.npmjs.org/codeburn/-/codeburn-0.9.8.tgz"
+  homepage "https://github.com/8harath/devspend"
+  url "https://registry.npmjs.org/devspend/-/devspend-0.9.8.tgz"
   sha256 "<computed-hash>"
   license "MIT"
 
@@ -181,7 +181,7 @@ class Codeburn < Formula
   end
 
   test do
-    system "#{bin}/codeburn", "--version"
+    system "#{bin}/devspend", "--version"
   end
 end
 ```
@@ -194,7 +194,7 @@ Before pushing, test the formula locally:
 
 ```bash
 brew install --build-from-source Formula/codeburn.rb
-codeburn --version
+devspend --version
 ```
 
 ### 4. Commit and Push
@@ -203,7 +203,7 @@ Commit the formula change:
 
 ```bash
 git add Formula/codeburn.rb
-git commit -m "codeburn: bump to 0.9.8"
+git commit -m "devspend: bump to 0.9.8"
 git push origin main
 ```
 
@@ -211,13 +211,13 @@ Users can now install with:
 
 ```bash
 brew tap getagentseal/codeburn
-brew install codeburn
+brew install devspend
 ```
 
 Or upgrade an existing installation:
 
 ```bash
-brew upgrade codeburn
+brew upgrade devspend
 ```
 
 ## Replacing Assets on an Existing Release
@@ -232,7 +232,7 @@ gh release upload mac-v0.9.8 mac/.build/dist/CodeBurnMenubar-v0.9.8.zip --clobbe
 gh release upload mac-v0.9.8 mac/.build/dist/CodeBurnMenubar-v0.9.8.zip.sha256 --clobber
 ```
 
-The GitHub Release page will now serve the fixed assets. The menubar installer selects the newest `mac-v*` release with `CodeBurnMenubar-v*.zip` plus its checksum, so users who run `codeburn menubar --force` after the replacement get the fixed version automatically.
+The GitHub Release page will now serve the fixed assets. The menubar installer selects the newest `mac-v*` release with `DevSpendMenubar-v*.zip` plus its checksum, so users who run `devspend menubar --force` after the replacement get the fixed version automatically.
 
 ## Rollback
 
@@ -243,9 +243,9 @@ git tag -d v0.9.8
 git push origin --delete v0.9.8
 ```
 
-npm does not allow republishing to the same version. If you must unpublish from npm, use `npm unpublish codeburn@0.9.8 --force` (requires Owner role), but this is discouraged and all users who installed that version retain it.
+npm does not allow republishing to the same version. If you must unpublish from npm, use `npm unpublish devspend@0.9.8 --force` (requires Owner role), but this is discouraged and all users who installed that version retain it.
 
-For the menubar, tag a new mac-v0.9.9 and let the workflow build and upload it. Users will see the update pill in the menubar settings and upgrade automatically (or manually via `codeburn menubar --force`).
+For the menubar, tag a new mac-v0.9.9 and let the workflow build and upload it. Users will see the update pill in the menubar settings and upgrade automatically (or manually via `devspend menubar --force`).
 
 ## Summary
 

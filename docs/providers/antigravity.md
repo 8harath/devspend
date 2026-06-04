@@ -30,7 +30,7 @@ Protobuf. Cascade and response objects map to `ParsedProviderCall` directly.
 
 ## Caching
 
-Custom file cache at `$CODEBURN_CACHE_DIR/antigravity-results.json` (defaults to `~/.cache/codeburn/`). The cache is also used as the data source when the RPC endpoint is unavailable, not just as an optimization. Bumping the cache version forces a recompute.
+Custom file cache at `$DEVSPEND_CACHE_DIR/antigravity-results.json` (defaults to `~/.cache/devspend/`). The cache is also used as the data source when the RPC endpoint is unavailable, not just as an optimization. Bumping the cache version forces a recompute.
 
 ## Deduplication
 

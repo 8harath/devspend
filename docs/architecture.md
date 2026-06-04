@@ -1,10 +1,10 @@
-# CodeBurn Architecture
+# DevSpend Architecture
 
 A map of the codebase. Read this once before opening a non-trivial PR.
 
 ## Three Surfaces
 
-CodeBurn is one Node.js CLI plus two GUI clients that shell out to it.
+DevSpend is one Node.js CLI plus two GUI clients that shell out to it.
 
 ```
 +----------------------+      +-----------------+
@@ -24,7 +24,7 @@ CodeBurn is one Node.js CLI plus two GUI clients that shell out to it.
                           +----------------------------+
 ```
 
-The macOS menubar (`mac/`) and the GNOME extension (`gnome/`) both invoke `codeburn status --format menubar-json --period <p>` and parse the JSON. They do not share code with the CLI; they only depend on its output contract.
+The macOS menubar (`mac/`) and the GNOME extension (`gnome/`) both invoke `devspend status --format menubar-json --period <p>` and parse the JSON. They do not share code with the CLI; they only depend on its output contract.
 
 ## CLI (`src/`)
 
@@ -71,7 +71,7 @@ output formatter (Ink TUI, JSON, or menubar-json)
 
 ### Cache Layers
 
-Three caches under `~/.cache/codeburn/` (override with `CODEBURN_CACHE_DIR`):
+Three caches under `~/.cache/devspend/` (override with `DEVSPEND_CACHE_DIR`):
 
 | File | Owner | Invalidation |
 |---|---|---|
@@ -148,7 +148,7 @@ Swift package (`mac/Package.swift`), targets macOS 14, strict concurrency on. La
 - `Data/` holds models, the CLI client, credential stores, and subscription services.
   - `DataClient.swift` spawns the CLI and decodes `MenubarPayload`. See file-level comment for why we never route through `/bin/zsh -c`.
   - `MenubarPayload.swift` mirrors the JSON the CLI emits; keep it in sync with `src/menubar-json.ts`.
-- `Security/CodeburnCLI.swift` resolves the CLI binary (env override `CODEBURN_BIN`, fallback `codeburn`), validates each argv entry against an allowlist regex, and augments PATH for Homebrew and npm-global installs. The Process is launched via `/usr/bin/env`, never via a shell.
+- `Security/CodeburnCLI.swift` resolves the CLI binary (env override `CODEBURN_BIN`, fallback `devspend`), validates each argv entry against an allowlist regex, and augments PATH for Homebrew and npm-global installs. The Process is launched via `/usr/bin/env`, never via a shell.
 - `Theme/` holds color and typography constants and the dark/light state.
 - `Views/` are the SwiftUI components rendered inside `NSPopover`.
 
@@ -163,7 +163,7 @@ Plain JavaScript, no bundler. Targets GNOME Shell 45-50 (`metadata.json`).
 - `extension.js` is the entry point. On `enable()` it constructs a `CodeBurnIndicator` and adds it to the panel.
 - `indicator.js` is the popover. It owns the period selector, the insight tabs, and the provider filter.
 - `dataClient.js` wraps `Gio.Subprocess` to call the CLI. It validates argv against the same allowlist pattern as the macOS client and augments PATH with `~/.local/bin`, `~/.npm-global/bin`, `~/.volta/bin`, `~/.bun/bin`, `~/.cargo/bin`, `~/.asdf/shims`, and a few others. Results are cached for 300 seconds.
-- `prefs.js` is the settings dialog backed by `schemas/org.gnome.shell.extensions.codeburn.gschema.xml`.
+- `prefs.js` is the settings dialog backed by `schemas/org.gnome.shell.extensions.devspend.gschema.xml`.
 - `install.sh` copies the extension into `~/.local/share/gnome-shell/extensions/`.
 
 ## Build (`scripts/`, `tsup.config.ts`)

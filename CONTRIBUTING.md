@@ -13,8 +13,8 @@ Thanks for your interest. This document covers what you need to know to send a w
 ## Setup
 
 ```bash
-git clone https://github.com/getagentseal/codeburn
-cd codeburn
+git clone https://github.com/8harath/devspend
+cd devspend
 npm install
 ```
 
@@ -96,7 +96,7 @@ New providers have the highest bar because broken parsing silently produces wron
 
 1. **Install the tool and use it.** Generate real sessions by actually coding with the provider. We do this ourselves for every provider we ship.
 2. **Test against real data.** Run `npm run dev -- today` and `npm run dev -- models` with your real sessions and confirm the output looks correct — costs are non-zero, model names resolve, session counts match what you see in the tool.
-3. **Include proof in the PR.** Attach a screenshot or terminal output showing codeburn correctly parsing your real sessions. PRs for new providers without evidence of local testing will not be reviewed.
+3. **Include proof in the PR.** Attach a screenshot or terminal output showing devspend correctly parsing your real sessions. PRs for new providers without evidence of local testing will not be reviewed.
 4. **Do not rely on AI-generated guesses about storage paths or schemas.** Tools change their data formats between versions. The only way to know the current schema is to install the tool and inspect the actual files on disk.
 
 PRs that add a provider based solely on online documentation or AI-generated code, without evidence of testing against real data, will be closed.
@@ -111,9 +111,9 @@ PRs that add a provider based solely on online documentation or AI-generated cod
 
 ## Reporting Bugs
 
-File issues at https://github.com/getagentseal/codeburn/issues. Useful details:
+File issues at https://github.com/8harath/devspend/issues. Useful details:
 
-- Output of `codeburn --version`.
+- Output of `devspend --version`.
 - Provider involved and rough size of your session history (`du -sh ~/.codex/sessions`, etc.).
 - Output of the failing command with `DEBUG=1` if applicable.
 - For parsing bugs: a redacted JSONL or SQLite snippet that reproduces the issue.
