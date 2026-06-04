@@ -7,7 +7,7 @@ export default class CodeBurnExtension extends Extension {
 
   enable() {
     this._indicator = new CodeBurnIndicator(this);
-    Main.panel.addToStatusArea('codeburn-indicator', this._indicator);
+    Main.panel.addToStatusArea('devspend-indicator', this._indicator);
   }
 
   disable() {

@@ -10,14 +10,14 @@ import { Readable } from 'node:stream'
 /// Public GitHub repo that hosts macOS release builds. CLI and menubar releases share
 /// the repository, so we scan recent releases and choose the newest `mac-v*` release
 /// that actually contains the menubar zip.
-const RELEASE_API = 'https://api.github.com/repos/getagentseal/codeburn/releases?per_page=20'
+const RELEASE_API = 'https://api.github.com/repos/8harath/devspend/releases?per_page=20'
 const APP_BUNDLE_NAME = 'CodeBurnMenubar.app'
-const EXPECTED_BUNDLE_ID = 'org.agentseal.codeburn-menubar'
+const EXPECTED_BUNDLE_ID = 'org.agentseal.devspend-menubar'
 const VERSIONED_ASSET_PATTERN = /^CodeBurnMenubar-v.+\.zip$/
 const APP_PROCESS_NAME = 'CodeBurnMenubar'
 const SUPPORTED_OS = 'darwin'
 const MIN_MACOS_MAJOR = 14
-const PERSISTED_CLI_PATH = join(homedir(), 'Library', 'Application Support', 'CodeBurn', 'codeburn-cli-path.v1')
+const PERSISTED_CLI_PATH = join(homedir(), 'Library', 'Application Support', 'DevSpend', 'devspend-cli-path.v1')
 
 export type InstallResult = { installedPath: string; launched: boolean }
 
@@ -30,7 +30,7 @@ export function resolveMenubarReleaseAssets(release: ReleaseResponse): ResolvedA
   if (!zip) {
     throw new Error(
       `No ${APP_BUNDLE_NAME} versioned zip found in release ${release.tag_name}. ` +
-      `Check https://github.com/getagentseal/codeburn/releases.`
+      `Check https://github.com/8harath/devspend/releases.`
     )
   }
   const checksum = release.assets.find(a => a.name === `${zip.name}.sha256`)
@@ -49,7 +49,7 @@ export function resolveLatestMenubarReleaseAssets(releases: ReleaseResponse[]): 
       continue
     }
   }
-  throw new Error('No mac-v* release with a CodeBurnMenubar-v*.zip and checksum was found.')
+    throw new Error('No mac-v* release with a DevSpendMenubar-v*.zip and checksum was found.')
 }
 
 function userApplicationsDir(): string {
@@ -92,7 +92,7 @@ async function sysProductVersion(): Promise<string> {
 async function fetchLatestReleaseAssets(): Promise<ResolvedAssets> {
   const response = await fetch(RELEASE_API, {
     headers: {
-      'User-Agent': 'codeburn-menubar-installer',
+      'User-Agent': 'devspend-menubar-installer',
       Accept: 'application/vnd.github+json',
     },
   })
@@ -105,7 +105,7 @@ async function fetchLatestReleaseAssets(): Promise<ResolvedAssets> {
 
 async function verifyChecksum(archivePath: string, checksumUrl: string): Promise<void> {
   const response = await fetch(checksumUrl, {
-    headers: { 'User-Agent': 'codeburn-menubar-installer' },
+    headers: { 'User-Agent': 'devspend-menubar-installer' },
     redirect: 'follow',
   })
   if (!response.ok) {
@@ -127,7 +127,7 @@ async function verifyChecksum(archivePath: string, checksumUrl: string): Promise
 
 async function downloadToFile(url: string, destPath: string): Promise<void> {
   const response = await fetch(url, {
-    headers: { 'User-Agent': 'codeburn-menubar-installer' },
+    headers: { 'User-Agent': 'devspend-menubar-installer' },
     redirect: 'follow',
   })
   if (!response.ok || response.body === null) {
@@ -195,7 +195,7 @@ async function resolvePersistentCodeburnPath(): Promise<string> {
 
 async function persistCodeburnPath(): Promise<void> {
   const cliPath = await resolvePersistentCodeburnPath()
-  await mkdir(join(homedir(), 'Library', 'Application Support', 'CodeBurn'), { recursive: true, mode: 0o700 })
+  await mkdir(join(homedir(), 'Library', 'Application Support', 'DevSpend'), { recursive: true, mode: 0o700 })
   await writeFile(PERSISTED_CLI_PATH, `${cliPath}\n`, { mode: 0o600 })
   await chmod(PERSISTED_CLI_PATH, 0o600)
 }

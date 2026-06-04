@@ -1,31 +1,31 @@
-# CodeBurn Menubar (macOS)
+# DevSpend Menubar (macOS)
 
-Native Swift + SwiftUI menubar app. The codeburn menubar surface.
+Native Swift + SwiftUI menubar app. The DevSpend menubar surface.
 
 ## Requirements
 
 - macOS 14+ (Sonoma)
 - Swift 6.0+ toolchain (bundled with Xcode 16 or standalone)
-- `codeburn` CLI installed globally (`npm install -g codeburn`)
+- `devspend` CLI installed globally (`npm install -g devspend`)
 
 ## Install (end users)
 
 One command:
 
 ```bash
-codeburn menubar
+devspend menubar
 ```
 
-That's it. The command records the persistent `codeburn` CLI path, downloads the latest `.app` from the newest `mac-v*` GitHub Release with a matching checksum, verifies it, drops it into `~/Applications`, clears Gatekeeper quarantine, and launches it. Re-running it upgrades in place with `--force`, or just launches the existing copy otherwise.
+That's it. The command records the persistent `devspend` CLI path, downloads the latest `.app` from the newest `mac-v*` GitHub Release with a matching checksum, verifies it, drops it into `~/Applications`, clears Gatekeeper quarantine, and launches it. Re-running it upgrades in place with `--force`, or just launches the existing copy otherwise.
 
 ### Build from source
 
 For contributors running a local build instead of the packaged release:
 
 ```bash
-npm install -g codeburn                       # CLI the app shells out to for data
-git clone https://github.com/getagentseal/codeburn.git
-cd codeburn/mac
+npm install -g devspend                       # CLI the app shells out to for data
+git clone https://github.com/8harath/devspend.git
+cd devspend/mac
 swift build -c release
 .build/release/CodeBurnMenubar                # launch
 ```
@@ -35,7 +35,7 @@ swift build -c release
 ```bash
 cd mac
 swift build
-# Point the app at your dev CLI build instead of the globally installed `codeburn`:
+# Point the app at your dev CLI build instead of the globally installed `devspend`:
 npm --prefix .. run build
 CODEBURN_ALLOW_DEV_BIN=1 CODEBURN_BIN="node $(pwd)/../dist/cli.js" swift run
 ```
@@ -44,9 +44,9 @@ The app registers itself as a menubar accessory (`LSUIElement = true` at runtime
 
 ## Data source
 
-On launch and every 60 seconds thereafter, the app spawns `codeburn status --format menubar-json --no-optimize` directly (argv, no shell) via `CodeburnCLI.makeProcess` and decodes the JSON into `MenubarPayload`. The manual refresh button in the footer invokes the same command without `--no-optimize`, which includes optimize findings but takes longer.
+On launch and every 60 seconds thereafter, the app spawns `devspend status --format menubar-json --no-optimize` directly (argv, no shell) via `CodeburnCLI.makeProcess` and decodes the JSON into `MenubarPayload`. The manual refresh button in the footer invokes the same command without `--no-optimize`, which includes optimize findings but takes longer.
 
-Release installs record a persistent absolute CLI path in `~/Library/Application Support/CodeBurn/codeburn-cli-path.v1`, then fall back to Homebrew's common `codeburn` locations. For development only, set `CODEBURN_ALLOW_DEV_BIN=1` with `CODEBURN_BIN`; the value is validated against a strict allowlist before use, so a malicious env var can't inject shell commands.
+Release installs record a persistent absolute CLI path in `~/Library/Application Support/DevSpend/devspend-cli-path.v1`, then fall back to Homebrew's common `devspend` locations. For development only, set `CODEBURN_ALLOW_DEV_BIN=1` with `CODEBURN_BIN`; the value is validated against a strict allowlist before use, so a malicious env var can't inject shell commands.
 
 ## Project layout
 

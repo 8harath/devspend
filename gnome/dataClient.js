@@ -68,7 +68,7 @@ export class DataClient {
     if (this._codeburnPath && SAFE_ARG_RE.test(this._codeburnPath)) {
       base = this._codeburnPath.split(' ').filter(s => s.length > 0);
     } else {
-      base = ['codeburn'];
+      base = ['devspend'];
     }
 
     const args = [
