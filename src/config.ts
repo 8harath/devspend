@@ -30,6 +30,8 @@ export type BudgetEntry = {
   setAt: string
 }
 
+export type BudgetScope = 'project' | 'model' | 'directory'
+
 export type CodeburnConfig = {
   currency?: {
     code: string
