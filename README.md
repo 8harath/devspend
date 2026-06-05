@@ -40,7 +40,7 @@
   - [yield — Productive vs Abandoned Spend](#yield--productive-vs-abandoned-spend)
   - [models — Per-Model Table](#models--per-model-table)
   - [status — One-Liner Summary](#status--one-liner-summary)
-  - [export — CSV / JSON Export](#export--csv--json-export)
+  - [export — CSV / JSON / Markdown / HTML Export](#export--csv--json--markdown--html-export)
   - [plan — Subscription Tracking](#plan--subscription-tracking)
   - [currency — Display Currency](#currency--display-currency)
   - [model-alias — Fix Missing Costs](#model-alias--fix-missing-costs)
@@ -323,15 +323,29 @@ Designed for shell prompts, scripts, and the macOS / GNOME menubar clients.
 
 ---
 
-### `export` — CSV / JSON Export
+### `export` — CSV / JSON / Markdown / HTML Export
 
 ```bash
 devspend export                         # CSV with today, 7 days, 30 days
 devspend export -f json                 # JSON export
+devspend export -f markdown             # shareable markdown report
+devspend export -f html                 # shareable HTML report
 devspend export -o ~/usage.csv          # write to file
 devspend export --from 2026-04-01 --to 2026-04-30  # date range
 devspend export --provider cursor       # filter to one provider
 ```
+
+`devspend export` also supports `sqlite` for structured local storage.
+
+### `export-schedule` — Recurring Exports
+
+```bash
+devspend export-schedule -f markdown -o ~/exports --runs 1
+devspend export-schedule -f html -o ~/slack-drafts --every 60
+devspend export-schedule --format json --runs 0 --every 15
+```
+
+The scheduler writes timestamped files into the target directory, so you can point a folder at a PR note, Slack upload, or a sync tool. Use `--runs 1` for a single snapshot and `--runs 0` to keep going until you stop it.
 
 ---
 
