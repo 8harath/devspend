@@ -8,7 +8,7 @@ import { renderStatusBar, formatTokens, formatCost } from './format.js'
 import { type PeriodData, type ProviderCost } from './menubar-json.js'
 import { buildMenubarPayload } from './menubar-json.js'
 import { getDaysInRange, ensureCacheHydrated, emptyCache, BACKFILL_DAYS, toDateString } from './daily-cache.js'
-import { aggregateProjectsIntoDays, buildPeriodDataFromDays, dateKey } from './day-aggregator.js'
+import { aggregateProjectsIntoDays, buildPeriodDataFromDays, computeSpendTrends, dateKey } from './day-aggregator.js'
 import { CATEGORY_LABELS, type DateRange, type ProjectSummary, type TaskCategory } from './types.js'
 import { aggregateModelEfficiency } from './model-efficiency.js'
 import { renderDashboard, shortProject } from './dashboard.js'
@@ -1275,10 +1275,13 @@ program
     const trend = secondHalfAvg > firstHalfAvg * 1.05 ? '↑ increasing' : secondHalfAvg < firstHalfAvg * 0.95 ? '↓ decreasing' : '→ stable'
     const maxDaily = Math.max(...Object.values(dailyCosts))
     const BAR_W = 24
+    const trends = computeSpendTrends(projects)
 
     console.log(`\n  Burn Rate  ·  ${label}\n`)
     console.log(`  ${'Average daily'.padEnd(22)}${formatCost(avg)}`)
     console.log(`  ${'Trend'.padEnd(22)}${trend}`)
+    console.log(`  ${'WoW delta'.padEnd(22)}${formatCost(trends.week.deltaCost)}${trends.week.deltaPercent === null ? '' : ` (${trends.week.deltaPercent >= 0 ? '+' : ''}${trends.week.deltaPercent.toFixed(1)}%)`}`)
+    console.log(`  ${'MoM delta'.padEnd(22)}${formatCost(trends.month.deltaCost)}${trends.month.deltaPercent === null ? '' : ` (${trends.month.deltaPercent >= 0 ? '+' : ''}${trends.month.deltaPercent.toFixed(1)}%)`}`)
     console.log(`  ${'Projected 30 days'.padEnd(22)}${formatCost(avg * 30)}`)
     console.log(`  ${'Total for period'.padEnd(22)}${formatCost(total)}`)
     console.log(`  ${'Active days'.padEnd(22)}${days.length}`)

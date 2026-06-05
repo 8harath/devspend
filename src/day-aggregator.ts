@@ -1,4 +1,5 @@
 import type { DailyEntry } from './daily-cache.js'
+import { toDateString } from './daily-cache.js'
 import type { PeriodData } from './menubar-json.js'
 import { CATEGORY_LABELS, type ProjectSummary, type TaskCategory } from './types.js'
 
@@ -139,5 +140,102 @@ export function buildPeriodDataFromDays(days: DailyEntry[], label: string): Peri
     models: Object.entries(modelTotals)
       .sort(([, a], [, b]) => b.cost - a.cost)
       .map(([name, d]) => ({ name, ...d })),
+  }
+}
+
+export type TrendWindow = {
+  currentCost: number
+  previousCost: number
+  deltaCost: number
+  deltaPercent: number | null
+}
+
+export type ProjectTrend = {
+  project: string
+  projectPath: string
+  recentCost: number
+  previousCost: number
+  deltaCost: number
+  deltaPercent: number | null
+  acceleration: number
+}
+
+export type SpendTrends = {
+  week: TrendWindow
+  month: TrendWindow
+  projects: ProjectTrend[]
+}
+
+function windowDelta(current: number, previous: number): TrendWindow {
+  const deltaCost = current - previous
+  const deltaPercent = previous > 0 ? (deltaCost / previous) * 100 : null
+  return { currentCost: current, previousCost: previous, deltaCost, deltaPercent }
+}
+
+function sumProjectCostInWindow(project: ProjectSummary, startDate: string, endDate: string): number {
+  let total = 0
+  for (const session of project.sessions) {
+    for (const turn of session.turns) {
+      for (const call of turn.assistantCalls) {
+        const day = dateKey(call.timestamp)
+        if (day >= startDate && day <= endDate) total += call.costUSD
+      }
+    }
+  }
+  return total
+}
+
+export function computeSpendTrends(projects: ProjectSummary[], today = new Date()): SpendTrends {
+  const todayKey = toDateString(today)
+  const currentWeekStart = new Date(today)
+  currentWeekStart.setUTCDate(currentWeekStart.getUTCDate() - 6)
+  const previousWeekStart = new Date(today)
+  previousWeekStart.setUTCDate(previousWeekStart.getUTCDate() - 13)
+  const previousWeekEnd = new Date(today)
+  previousWeekEnd.setUTCDate(previousWeekEnd.getUTCDate() - 7)
+  const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+  const previousMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+  const previousMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0)
+
+  const currentWeekStartKey = toDateString(currentWeekStart)
+  const previousWeekStartKey = toDateString(previousWeekStart)
+  const previousWeekEndKey = toDateString(previousWeekEnd)
+  const currentMonthStartKey = toDateString(currentMonthStart)
+  const previousMonthStartKey = toDateString(previousMonthStart)
+  const previousMonthEndKey = toDateString(previousMonthEnd)
+
+  let currentWeek = 0
+  let previousWeek = 0
+  let currentMonth = 0
+  let previousMonth = 0
+
+  for (const project of projects) {
+    currentWeek += sumProjectCostInWindow(project, currentWeekStartKey, todayKey)
+    previousWeek += sumProjectCostInWindow(project, previousWeekStartKey, previousWeekEndKey)
+    currentMonth += sumProjectCostInWindow(project, currentMonthStartKey, todayKey)
+    previousMonth += sumProjectCostInWindow(project, previousMonthStartKey, previousMonthEndKey)
+  }
+
+  const projectTrends = projects
+    .map(project => {
+      const recent = sumProjectCostInWindow(project, currentWeekStartKey, todayKey)
+      const prior = sumProjectCostInWindow(project, previousWeekStartKey, previousWeekEndKey)
+      const delta = recent - prior
+      return {
+        project: project.project,
+        projectPath: project.projectPath,
+        recentCost: recent,
+        previousCost: prior,
+        deltaCost: delta,
+        deltaPercent: prior > 0 ? (delta / prior) * 100 : null,
+        acceleration: (recent / 7) - (prior / 7),
+      }
+    })
+    .sort((a, b) => Math.abs(b.acceleration) - Math.abs(a.acceleration))
+
+  return {
+    week: windowDelta(currentWeek, previousWeek),
+    month: windowDelta(currentMonth, previousMonth),
+    projects: projectTrends,
   }
 }

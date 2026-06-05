@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { aggregateProjectsIntoDays, buildPeriodDataFromDays, dateKey } from '../src/day-aggregator.js'
+import { aggregateProjectsIntoDays, buildPeriodDataFromDays, computeSpendTrends, dateKey } from '../src/day-aggregator.js'
 import type { ProjectSummary } from '../src/types.js'
 
 function makeProject(overrides: Partial<ProjectSummary> & { sessions: ProjectSummary['sessions'] }): ProjectSummary {
@@ -305,5 +305,106 @@ describe('buildPeriodDataFromDays', () => {
     expect(costDay, 'turn cost must be bucketed somewhere').toBeDefined()
     expect(costDay!.date).toBe(expectedDate)
     expect(costDay!.calls).toBe(1)
+  })
+})
+
+describe('computeSpendTrends', () => {
+  it('computes week-over-week, month-over-month, and project acceleration', () => {
+    const projects: ProjectSummary[] = [
+      makeProject({
+        project: 'alpha',
+        projectPath: '/work/alpha',
+        sessions: [{
+          sessionId: 'a1',
+          project: 'alpha',
+          firstTimestamp: '2026-05-27T10:00:00Z',
+          lastTimestamp: '2026-06-04T10:00:00Z',
+          totalCostUSD: 0,
+          totalInputTokens: 0,
+          totalOutputTokens: 0,
+          totalCacheReadTokens: 0,
+          totalCacheWriteTokens: 0,
+          apiCalls: 2,
+          turns: [
+            {
+              userMessage: 'w1',
+              timestamp: '2026-05-28T10:00:00Z',
+              sessionId: 'a1',
+              category: 'coding',
+              retries: 0,
+              hasEdits: false,
+              assistantCalls: [makeCall('2026-05-28T10:00:00Z', 10)],
+            },
+            {
+              userMessage: 'w2',
+              timestamp: '2026-06-04T10:00:00Z',
+              sessionId: 'a1',
+              category: 'coding',
+              retries: 0,
+              hasEdits: false,
+              assistantCalls: [makeCall('2026-06-04T10:00:00Z', 30)],
+            },
+          ],
+          modelBreakdown: {},
+          toolBreakdown: {},
+          mcpBreakdown: {},
+          bashBreakdown: {},
+          categoryBreakdown: {} as never,
+          skillBreakdown: {} as never,
+        }],
+      }),
+      makeProject({
+        project: 'beta',
+        projectPath: '/work/beta',
+        sessions: [{
+          sessionId: 'b1',
+          project: 'beta',
+          firstTimestamp: '2026-05-20T10:00:00Z',
+          lastTimestamp: '2026-05-28T10:00:00Z',
+          totalCostUSD: 0,
+          totalInputTokens: 0,
+          totalOutputTokens: 0,
+          totalCacheReadTokens: 0,
+          totalCacheWriteTokens: 0,
+          apiCalls: 2,
+          turns: [
+            {
+              userMessage: 'm1',
+              timestamp: '2026-05-21T10:00:00Z',
+              sessionId: 'b1',
+              category: 'coding',
+              retries: 0,
+              hasEdits: false,
+              assistantCalls: [makeCall('2026-05-21T10:00:00Z', 5)],
+            },
+            {
+              userMessage: 'm2',
+              timestamp: '2026-05-28T10:00:00Z',
+              sessionId: 'b1',
+              category: 'coding',
+              retries: 0,
+              hasEdits: false,
+              assistantCalls: [makeCall('2026-05-28T10:00:00Z', 5)],
+            },
+          ],
+          modelBreakdown: {},
+          toolBreakdown: {},
+          mcpBreakdown: {},
+          bashBreakdown: {},
+          categoryBreakdown: {} as never,
+          skillBreakdown: {} as never,
+        }],
+      }),
+    ]
+
+    const trends = computeSpendTrends(projects, new Date('2026-06-04T12:00:00Z'))
+    expect(trends.week.currentCost).toBe(30)
+    expect(trends.week.previousCost).toBe(15)
+    expect(trends.week.deltaCost).toBe(15)
+    expect(trends.week.deltaPercent).toBe(100)
+    expect(trends.month.currentCost).toBe(30)
+    expect(trends.month.previousCost).toBe(20)
+    expect(trends.projects[0]?.project).toBe('alpha')
+    expect(trends.projects[0]?.acceleration).toBeGreaterThan(0)
   })
 })

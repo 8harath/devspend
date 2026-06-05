@@ -16,6 +16,7 @@ import { getPlanUsages, type PlanUsage } from './plan-usage.js'
 import { planDisplayName } from './plans.js'
 import { getDateRange, PERIODS, PERIOD_LABELS, type Period, formatDateRangeLabel } from './cli-date.js'
 import { patchStdoutForWindows } from './ink-win.js'
+import { computeSpendTrends } from './day-aggregator.js'
 
 type View = 'dashboard' | 'optimize' | 'compare'
 
@@ -114,6 +115,13 @@ function planStatusText(planUsage: PlanUsage): string {
   return `${(planUsage.spentApiEquivalentUsd / Math.max(planUsage.budgetUsd, 1)).toFixed(1)}x your subscription value. Projected month: ${formatCost(planUsage.projectedMonthUsd)} (reset in ${planUsage.daysUntilReset} days).`
 }
 
+function formatTrend(current: number, previous: number): string {
+  const delta = current - previous
+  const sign = delta > 0 ? '+' : ''
+  const pct = previous > 0 ? ` (${sign}${((delta / previous) * 100).toFixed(1)}%)` : ''
+  return `${sign}${formatCost(delta)}${pct}`
+}
+
 function Overview({ projects, label, width, planUsages }: { projects: ProjectSummary[]; label: string; width: number; planUsages?: PlanUsage[] }) {
   const totalCost = projects.reduce((s, p) => s + p.totalCostUSD, 0)
   const totalCalls = projects.reduce((s, p) => s + p.totalApiCalls, 0)
@@ -127,6 +135,7 @@ function Overview({ projects, label, width, planUsages }: { projects: ProjectSum
   const cacheHit = allInputTokens > 0
     ? (totalCacheRead / allInputTokens) * 100 : 0
   const activePlanUsages = planUsages ?? []
+  const trends = computeSpendTrends(projects)
 
   return (
     <Box flexDirection="column" paddingX={1} width={width} marginBottom={1}>
@@ -146,6 +155,9 @@ function Overview({ projects, label, width, planUsages }: { projects: ProjectSum
       </Text>
       <Text dimColor wrap="truncate-end">
         {formatTokens(totalInput)} in   {formatTokens(totalOutput)} out   {formatTokens(totalCacheRead)} cached   {formatTokens(totalCacheWrite)} written
+      </Text>
+      <Text dimColor wrap="truncate-end">
+        WoW {formatTrend(trends.week.currentCost, trends.week.previousCost)}   MoM {formatTrend(trends.month.currentCost, trends.month.previousCost)}
       </Text>
       {activePlanUsages.length > 0 && (
         <>
@@ -226,6 +238,7 @@ function ProjectBreakdown({ projects, pw, bw, budgets }: { projects: ProjectSumm
   const maxCost = Math.max(...projects.map(p => p.totalCostUSD))
   const hasBudgets = budgets && budgets.size > 0
   const nw = Math.max(8, pw - bw - (hasBudgets ? PROJECT_COL_WITH_OVERHEAD_WIDTH : PROJECT_COL_BASE_WIDTH))
+  const trends = computeSpendTrends(projects)
   return (
     <Panel title="By Project" width={pw}>
       <Text dimColor wrap="truncate-end">
@@ -247,6 +260,14 @@ function ProjectBreakdown({ projects, pw, bw, budgets }: { projects: ProjectSumm
           </Text>
         )
       })}
+      {trends.projects.slice(0, 3).map((trend, i) => (
+        <Text key={`${trend.project}-trend-${i}`} dimColor wrap="truncate-end">
+          <Text>{fit(shortProject(trend.projectPath), nw)}</Text>
+          <Text> accel </Text>
+          <Text bold>{formatCost(trend.acceleration)}</Text>
+          <Text dimColor>{trend.deltaPercent === null ? '' : ` (${trend.deltaPercent > 0 ? '+' : ''}${trend.deltaPercent.toFixed(1)}%)`}</Text>
+        </Text>
+      ))}
     </Panel>
   )
 }
