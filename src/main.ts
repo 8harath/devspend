@@ -1,6 +1,6 @@
 import { Command } from 'commander'
 import { installMenubarApp } from './menubar-installer.js'
-import { exportCsv, exportJson, exportSqlite, type PeriodExport } from './export.js'
+import { exportCsv, exportHtml, exportJson, exportMarkdown, exportSqlite, type PeriodExport } from './export.js'
 import { loadPricing, setModelAliases } from './models.js'
 import { parseAllSessions, filterProjectsByName, filterProjectsByDateRange, clearSessionCache } from './parser.js'
 import { convertCost } from './currency.js'
@@ -21,6 +21,7 @@ import { runGit } from './yield.js'
 import { clampResetDay, getPlanUsageOrNull, getPlanUsages, type PlanUsage } from './plan-usage.js'
 import { getPresetPlan, isPlanId, isPlanProvider, PLAN_IDS, PLAN_PROVIDERS, planDisplayName } from './plans.js'
 import { createRequire } from 'node:module'
+import { join } from 'node:path'
 
 const require = createRequire(import.meta.url)
 const { version } = require('../package.json')
@@ -48,6 +49,39 @@ function parseNumber(value: string): number {
 
 function parseInteger(value: string): number {
   return parseInt(value, 10)
+}
+
+async function buildExportPeriods(opts: {
+  from?: string
+  to?: string
+  provider: string
+  project: string[]
+  exclude: string[]
+}) {
+  const fp = (p: ProjectSummary[]) => filterProjectsByName(p, opts.project, opts.exclude)
+  let customRange: DateRange | null = null
+  try {
+    customRange = parseDateRangeFlags(opts.from, opts.to)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(`\n  Error: ${message}\n`)
+    process.exit(1)
+  }
+
+  let periods: PeriodExport[]
+  if (customRange) {
+    periods = [{ label: formatDateRangeLabel(opts.from, opts.to), projects: fp(await parseAllSessions(customRange, opts.provider)) }]
+    clearSessionCache()
+  } else {
+    const thirtyDayProjects = fp(await parseAllSessions(getDateRange('30days').range, opts.provider))
+    clearSessionCache()
+    periods = [
+      { label: 'Today', projects: filterProjectsByDateRange(thirtyDayProjects, getDateRange('today').range) },
+      { label: '7 Days', projects: filterProjectsByDateRange(thirtyDayProjects, getDateRange('week').range) },
+      { label: '30 Days', projects: thirtyDayProjects },
+    ]
+  }
+  return { periods, customRange }
 }
 
 type JsonPlanSummary = {
@@ -632,8 +666,8 @@ program
 
 program
   .command('export')
-  .description('Export usage data to CSV or JSON')
-  .option('-f, --format <format>', 'Export format: csv, json, sqlite', 'csv')
+  .description('Export usage data to CSV, JSON, SQLite, Markdown, or HTML')
+  .option('-f, --format <format>', 'Export format: csv, json, sqlite, markdown, html', 'csv')
   .option('-o, --output <path>', 'Output file path')
   .option('--from <date>', 'Start date (YYYY-MM-DD). Exports a single custom period when set')
   .option('--to <date>', 'End date (YYYY-MM-DD). Exports a single custom period when set')
@@ -641,32 +675,15 @@ program
   .option('--project <name>', 'Show only projects matching name (repeatable)', collect, [])
   .option('--exclude <name>', 'Exclude projects matching name (repeatable)', collect, [])
   .action(async (opts) => {
-    assertFormat(opts.format, ['csv', 'json', 'sqlite'], 'export')
+    assertFormat(opts.format, ['csv', 'json', 'sqlite', 'markdown', 'html'], 'export')
     await loadPricing()
-    const pf = opts.provider
-    const fp = (p: ProjectSummary[]) => filterProjectsByName(p, opts.project, opts.exclude)
-    let customRange: DateRange | null = null
-    try {
-      customRange = parseDateRangeFlags(opts.from, opts.to)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      console.error(`\n  Error: ${message}\n`)
-      process.exit(1)
-    }
-
-    let periods: PeriodExport[]
-    if (customRange) {
-      periods = [{ label: formatDateRangeLabel(opts.from, opts.to), projects: fp(await parseAllSessions(customRange, pf)) }]
-      clearSessionCache()
-    } else {
-      const thirtyDayProjects = fp(await parseAllSessions(getDateRange('30days').range, pf))
-      clearSessionCache()
-      periods = [
-        { label: 'Today', projects: filterProjectsByDateRange(thirtyDayProjects, getDateRange('today').range) },
-        { label: '7 Days', projects: filterProjectsByDateRange(thirtyDayProjects, getDateRange('week').range) },
-        { label: '30 Days', projects: thirtyDayProjects },
-      ]
-    }
+    const { periods, customRange } = await buildExportPeriods({
+      from: opts.from,
+      to: opts.to,
+      provider: opts.provider,
+      project: opts.project,
+      exclude: opts.exclude,
+    })
 
     if (periods.every(p => p.projects.length === 0)) {
       console.log('\n  No usage data found.\n')
@@ -674,7 +691,7 @@ program
     }
 
     const defaultName = `devspend-${toDateString(new Date())}`
-    const outputPath = opts.output ?? `${defaultName}.${opts.format}`
+    const outputPath = opts.output ?? `${defaultName}.${opts.format === 'markdown' ? 'md' : opts.format}`
 
     let savedPath: string
     try {
@@ -682,6 +699,10 @@ program
         savedPath = await exportJson(periods, outputPath)
       } else if (opts.format === 'sqlite') {
         savedPath = await exportSqlite(periods, outputPath)
+      } else if (opts.format === 'markdown') {
+        savedPath = await exportMarkdown(periods, outputPath)
+      } else if (opts.format === 'html') {
+        savedPath = await exportHtml(periods, outputPath)
       } else {
         savedPath = await exportCsv(periods, outputPath)
       }
@@ -696,6 +717,55 @@ program
 
     const exportedLabel = customRange ? formatDateRangeLabel(opts.from, opts.to) : 'Today + 7 Days + 30 Days'
     console.log(`\n  Exported (${exportedLabel}) to: ${savedPath}\n`)
+  })
+
+program
+  .command('export-schedule')
+  .description('Schedule recurring exports into a directory with timestamped filenames')
+  .option('-f, --format <format>', 'Export format: csv, json, sqlite, markdown, html', 'md')
+  .option('-o, --output <path>', 'Output directory path')
+  .option('--every <minutes>', 'Run interval in minutes', parseNumber, 60)
+  .option('--runs <count>', 'Number of exports to run before exiting (0 = forever)', parseInteger, 0)
+  .option('--from <date>', 'Start date (YYYY-MM-DD). Exports a single custom period when set')
+  .option('--to <date>', 'End date (YYYY-MM-DD). Exports a single custom period when set')
+  .option('--provider <provider>', 'Filter by provider (e.g. claude, gemini, cursor, copilot)', 'all')
+  .option('--project <name>', 'Show only projects matching name (repeatable)', collect, [])
+  .option('--exclude <name>', 'Exclude projects matching name (repeatable)', collect, [])
+  .action(async (opts) => {
+    const allowed = ['csv', 'json', 'sqlite', 'markdown', 'md', 'html']
+    assertFormat(opts.format, allowed, 'export-schedule')
+    await loadPricing()
+    const { periods, customRange } = await buildExportPeriods({
+      from: opts.from,
+      to: opts.to,
+      provider: opts.provider,
+      project: opts.project,
+      exclude: opts.exclude,
+    })
+    if (periods.every(p => p.projects.length === 0)) {
+      console.log('\n  No usage data found.\n')
+      return
+    }
+    const baseDir = opts.output ?? `devspend-export-${toDateString(new Date())}`
+    const suffix = opts.format === 'md' ? 'md' : opts.format
+    const doOnce = async () => {
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const outputPath = join(baseDir, `devspend-${stamp}.${suffix}`)
+      let savedPath = outputPath
+      if (opts.format === 'json') savedPath = await exportJson(periods, outputPath)
+      else if (opts.format === 'sqlite') savedPath = await exportSqlite(periods, outputPath)
+      else if (opts.format === 'html') savedPath = await exportHtml(periods, outputPath)
+      else if (opts.format === 'markdown' || opts.format === 'md') savedPath = await exportMarkdown(periods, outputPath)
+      else savedPath = await exportCsv(periods, outputPath)
+      console.log(`\n  Exported (${customRange ? formatDateRangeLabel(opts.from, opts.to) : 'Today + 7 Days + 30 Days'}) to: ${savedPath}\n`)
+    }
+    let runs = 0
+    while (opts.runs === 0 || runs < opts.runs) {
+      await doOnce()
+      runs++
+      if (opts.runs !== 0 && runs >= opts.runs) break
+      await new Promise(r => setTimeout(r, opts.every * 60_000))
+    }
   })
 
 program

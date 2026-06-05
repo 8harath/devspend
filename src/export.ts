@@ -227,6 +227,39 @@ export type PeriodExport = {
   projects: ProjectSummary[]
 }
 
+function escMd(s: string): string {
+  return s.replace(/\|/g, '\\|').replace(/\n/g, ' ')
+}
+
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function rowsToMarkdownTable(rows: Row[]): string {
+  if (rows.length === 0) return '_No data available._\n'
+  const headers = Object.keys(rows[0])
+  const lines = [
+    `| ${headers.map(escMd).join(' | ')} |`,
+    `| ${headers.map(() => '---').join(' | ')} |`,
+  ]
+  for (const row of rows) {
+    lines.push(`| ${headers.map(h => escMd(String(row[h] ?? ''))).join(' | ')} |`)
+  }
+  return lines.join('\n') + '\n'
+}
+
+function rowsToHtmlTable(rows: Row[]): string {
+  if (rows.length === 0) return '<p>No data available.</p>'
+  const headers = Object.keys(rows[0])
+  const head = `<tr>${headers.map(h => `<th>${escHtml(h)}</th>`).join('')}</tr>`
+  const body = rows.map(row => `<tr>${headers.map(h => `<td>${escHtml(String(row[h] ?? ''))}</td>`).join('')}</tr>`).join('')
+  return `<table><thead>${head}</thead><tbody>${body}</tbody></table>`
+}
+
 function buildSummaryRows(periods: PeriodExport[]): Row[] {
   const { code } = getCurrency()
   return periods.map(p => {
@@ -242,6 +275,51 @@ function buildSummaryRows(periods: PeriodExport[]): Row[] {
       Projects: projectCount,
     }
   })
+}
+
+function buildMarkdownDocument(periods: PeriodExport[]): string {
+  const { code } = getCurrency()
+  const generated = new Date().toISOString()
+  const sections = [
+    `# DevSpend Usage Export`,
+    '',
+    `- Generated: ${generated}`,
+    `- Currency: ${code}`,
+    `- Periods: ${periods.map(p => p.label).join(', ')}`,
+    '',
+    '## Summary',
+    rowsToMarkdownTable(buildSummaryRows(periods)),
+    '## Daily',
+    rowsToMarkdownTable(periods.flatMap(p => buildDailyRows(p.projects, p.label))),
+    '## Activity',
+    rowsToMarkdownTable(periods.flatMap(p => buildActivityRows(p.projects, p.label))),
+    '## Models',
+    rowsToMarkdownTable(periods.flatMap(p => buildModelRows(p.projects, p.label))),
+  ]
+  return sections.join('\n')
+}
+
+function buildHtmlDocument(periods: PeriodExport[]): string {
+  const { code } = getCurrency()
+  const generated = new Date().toISOString()
+  const sections = [
+    '<!doctype html>',
+    '<html><head><meta charset="utf-8"><title>DevSpend Usage Export</title>',
+    '<style>body{font-family:system-ui,sans-serif;max-width:1100px;margin:2rem auto;padding:0 1rem;color:#111}table{border-collapse:collapse;width:100%;margin:1rem 0 2rem}th,td{border:1px solid #ddd;padding:.45rem .6rem;text-align:left;vertical-align:top}th{background:#f5f5f5}</style>',
+    '</head><body>',
+    '<h1>DevSpend Usage Export</h1>',
+    `<p>Generated: ${escHtml(generated)}<br>Currency: ${escHtml(code)}<br>Periods: ${escHtml(periods.map(p => p.label).join(', '))}</p>`,
+    '<h2>Summary</h2>',
+    rowsToHtmlTable(buildSummaryRows(periods)),
+    '<h2>Daily</h2>',
+    rowsToHtmlTable(periods.flatMap(p => buildDailyRows(p.projects, p.label))),
+    '<h2>Activity</h2>',
+    rowsToHtmlTable(periods.flatMap(p => buildActivityRows(p.projects, p.label))),
+    '<h2>Models</h2>',
+    rowsToHtmlTable(periods.flatMap(p => buildModelRows(p.projects, p.label))),
+    '</body></html>',
+  ]
+  return sections.join('')
 }
 
 function buildReadme(periods: PeriodExport[]): string {
@@ -389,6 +467,20 @@ export async function exportJson(periods: PeriodExport[], outputPath: string): P
   }
   await mkdir(dirname(target), { recursive: true })
   await writeFile(target, JSON.stringify(data, null, 2), 'utf-8')
+  return target
+}
+
+export async function exportMarkdown(periods: PeriodExport[], outputPath: string): Promise<string> {
+  const target = resolve(outputPath.toLowerCase().endsWith('.md') ? outputPath : `${outputPath}.md`)
+  await mkdir(dirname(target), { recursive: true })
+  await writeFile(target, buildMarkdownDocument(periods), 'utf-8')
+  return target
+}
+
+export async function exportHtml(periods: PeriodExport[], outputPath: string): Promise<string> {
+  const target = resolve(outputPath.toLowerCase().endsWith('.html') ? outputPath : `${outputPath}.html`)
+  await mkdir(dirname(target), { recursive: true })
+  await writeFile(target, buildHtmlDocument(periods), 'utf-8')
   return target
 }
 

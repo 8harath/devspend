@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir, rm } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
-import { exportCsv, type PeriodExport } from '../src/export.js'
+import { exportCsv, exportHtml, exportMarkdown, type PeriodExport } from '../src/export.js'
 import type { ProjectSummary } from '../src/types.js'
 
 let tmpDir: string
@@ -192,5 +192,29 @@ describe('exportCsv', () => {
 
     expect(readme).toContain('selected detail period')
     expect(readme).not.toContain('30-day window')
+  })
+})
+
+describe('exportMarkdown', () => {
+  it('writes a shareable markdown report', async () => {
+    const periods: PeriodExport[] = [{ label: '30 Days', projects: [makeProject('app')] }]
+    const outputPath = join(tmpDir, 'report.md')
+    const file = await exportMarkdown(periods, outputPath)
+    const content = await readFile(file, 'utf-8')
+    expect(content).toContain('# DevSpend Usage Export')
+    expect(content).toContain('## Summary')
+    expect(content).toContain('| Period | Cost')
+  })
+})
+
+describe('exportHtml', () => {
+  it('writes a shareable html report', async () => {
+    const periods: PeriodExport[] = [{ label: '30 Days', projects: [makeProject('app')] }]
+    const outputPath = join(tmpDir, 'report.html')
+    const file = await exportHtml(periods, outputPath)
+    const content = await readFile(file, 'utf-8')
+    expect(content).toContain('<!doctype html>')
+    expect(content).toContain('<h1>DevSpend Usage Export</h1>')
+    expect(content).toContain('<table>')
   })
 })
