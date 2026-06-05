@@ -21,7 +21,7 @@ import { runGit } from './yield.js'
 import { clampResetDay, getPlanUsageOrNull, getPlanUsages, type PlanUsage } from './plan-usage.js'
 import { getPresetPlan, isPlanId, isPlanProvider, PLAN_IDS, PLAN_PROVIDERS, planDisplayName } from './plans.js'
 import { createRequire } from 'node:module'
-import { join } from 'node:path'
+import { join, normalize } from 'node:path'
 
 const require = createRequire(import.meta.url)
 const { version } = require('../package.json')
@@ -113,6 +113,67 @@ function toJsonPlanSummary(planUsage: PlanUsage): JsonPlanSummary {
 }
 
 type JsonPlanSummaryMap = Partial<Record<PlanProvider, JsonPlanSummary>>
+
+type BudgetScope = 'project' | 'model' | 'directory'
+type BudgetTarget = { scope: BudgetScope; key: string; label: string }
+type BudgetStatusRow = {
+  target: BudgetTarget
+  budgetUsd: number
+  spentUsd: number
+  status: 'OK' | 'NEAR' | 'OVER'
+}
+
+function budgetKey(scope: BudgetScope, value: string): string {
+  return `${scope}:${value}`
+}
+
+function parseBudgetKey(key: string): BudgetTarget {
+  const idx = key.indexOf(':')
+  if (idx === -1) return { scope: 'project', key, label: key }
+  const scope = key.slice(0, idx)
+  const value = key.slice(idx + 1)
+  if (scope === 'model' || scope === 'directory') return { scope, key: value, label: value }
+  if (scope === 'project') return { scope: 'project', key: value, label: value }
+  return { scope: 'project', key, label: key }
+}
+
+function normalizeDirKey(value: string): string {
+  return normalize(value).replace(/\\/g, '/').replace(/\/+$/, '')
+}
+
+function projectPathMatches(projectPath: string, dir: string): boolean {
+  const normalizedPath = normalize(projectPath).replace(/\\/g, '/')
+  const normalizedDir = normalizeDirKey(dir)
+  return normalizedDir.length > 0 && (normalizedPath === normalizedDir || normalizedPath.startsWith(`${normalizedDir}/`))
+}
+
+export function summarizeBudgets(projects: ProjectSummary[], budgets: Record<string, { monthlyUsd: number; setAt: string }>): BudgetStatusRow[] {
+  const modelCosts = new Map<string, number>()
+  for (const project of projects) {
+    for (const session of project.sessions) {
+      for (const [model, data] of Object.entries(session.modelBreakdown)) {
+        modelCosts.set(model, (modelCosts.get(model) ?? 0) + data.costUSD)
+      }
+    }
+  }
+
+  const rows: BudgetStatusRow[] = []
+  for (const [key, budget] of Object.entries(budgets)) {
+    const target = parseBudgetKey(key)
+    let spentUsd = 0
+    if (target.scope === 'project') {
+      const match = projects.find(p => p.project === target.key || (p.projectPath && p.projectPath.includes(target.key)))
+      spentUsd = match?.totalCostUSD ?? 0
+    } else if (target.scope === 'model') {
+      spentUsd = modelCosts.get(target.key) ?? 0
+    } else {
+      spentUsd = projects.filter(p => projectPathMatches(p.projectPath, target.key)).reduce((sum, project) => sum + project.totalCostUSD, 0)
+    }
+    const status = spentUsd > budget.monthlyUsd ? 'OVER' : spentUsd > budget.monthlyUsd * 0.8 ? 'NEAR' : 'OK'
+    rows.push({ target, budgetUsd: budget.monthlyUsd, spentUsd, status })
+  }
+  return rows.sort((a, b) => a.target.label.localeCompare(b.target.label))
+}
 
 function toJsonPlanSummaryMap(planUsages: PlanUsage[]): JsonPlanSummaryMap {
   const summaries: JsonPlanSummaryMap = {}
@@ -1471,7 +1532,7 @@ program
 
 program
   .command('alert [action]')
-  .description('Manage daily/weekly spend alert thresholds')
+  .description('Manage daily/weekly spend alert thresholds and budget warnings')
   .option('--daily <usd>', 'Daily spend threshold in USD', parseFloat)
   .option('--weekly <usd>', 'Weekly spend threshold in USD', parseFloat)
   .option('--webhook <url>', 'Webhook URL to POST when a threshold is breached')
@@ -1511,10 +1572,11 @@ program
       await loadPricing()
       const config = await readConfig()
       const alerts = config.alerts ?? {}
-      if (!alerts.dailyUsd && !alerts.weeklyUsd) {
+      if (!alerts.dailyUsd && !alerts.weeklyUsd && Object.keys(config.budgets ?? {}).length === 0) {
         console.log('\n  No alert thresholds set. Use: devspend alert set --daily <usd>\n')
         return
       }
+      const budgetRows = summarizeBudgets(await parseAllSessions(getDateRange('month').range, 'all'), config.budgets ?? {})
       const breaches: string[] = []
       console.log()
       if (alerts.dailyUsd) {
@@ -1534,6 +1596,14 @@ program
           breaches.push(`Weekly spend ${formatCost(weekCost)} exceeds limit ${formatCost(alerts.weeklyUsd)}`)
         } else {
           console.log(`  Weekly: ${formatCost(weekCost)} / $${alerts.weeklyUsd} — OK`)
+        }
+      }
+      for (const row of budgetRows) {
+        if (row.status === 'OVER') {
+          breaches.push(`${row.target.scope} budget ${row.target.label} exceeds limit ${formatCost(row.budgetUsd)} (${formatCost(row.spentUsd)})`)
+        } else {
+          const scopeLabel = row.target.scope[0].toUpperCase() + row.target.scope.slice(1)
+          console.log(`  ${scopeLabel}: ${row.target.label} ${formatCost(row.spentUsd)} / ${formatCost(row.budgetUsd)} — ${row.status}`)
         }
       }
       if (breaches.length > 0) {
@@ -1558,7 +1628,7 @@ program
 
     const config = await readConfig()
     const alerts = config.alerts ?? {}
-    if (!alerts.dailyUsd && !alerts.weeklyUsd) {
+    if (!alerts.dailyUsd && !alerts.weeklyUsd && Object.keys(config.budgets ?? {}).length === 0) {
       console.log('\n  No alert thresholds configured.')
       console.log('  Use: devspend alert set --daily <usd>\n')
       return
@@ -1567,6 +1637,10 @@ program
     if (alerts.dailyUsd) console.log(`  Daily:  $${alerts.dailyUsd}`)
     if (alerts.weeklyUsd) console.log(`  Weekly: $${alerts.weeklyUsd}`)
     if (alerts.webhook) console.log(`  Webhook: ${alerts.webhook}`)
+    for (const [key, budget] of Object.entries(config.budgets ?? {})) {
+      const target = parseBudgetKey(key)
+      console.log(`  Budget: ${target.scope} ${target.label} -> $${budget.monthlyUsd}`)
+    }
     console.log(`  Config: ${getConfigFilePath()}\n`)
   })
 
@@ -1676,12 +1750,16 @@ program
 program
   .command('budget [action] [project] [amount]')
   .description('Manage per-project monthly budget caps')
-  .action(async (action?: string, project?: string, amount?: string) => {
+  .option('--model', 'Treat the target as a model budget')
+  .option('--dir', 'Treat the target as a directory budget')
+  .action(async (action?: string, project?: string, amount?: string, opts?: { model?: boolean; dir?: boolean }) => {
     const mode = action ?? 'status'
+    const scope: BudgetScope = opts?.model ? 'model' : opts?.dir ? 'directory' : 'project'
 
     if (mode === 'set') {
       if (!project || !amount) {
-        console.error('\n  Usage: devspend budget set <project> <amount-usd>\n')
+        const scopeHint = scope === 'project' ? '<project>' : scope === 'model' ? '<model>' : '<directory>'
+        console.error(`\n  Usage: devspend budget set ${scopeHint} <amount-usd>\n`)
         process.exitCode = 1; return
       }
       const monthlyUsd = parseFloat(amount)
@@ -1691,9 +1769,9 @@ program
       }
       const config = await readConfig()
       config.budgets = config.budgets ?? {}
-      config.budgets[project] = { monthlyUsd, setAt: new Date().toISOString() }
+      config.budgets[budgetKey(scope, scope === 'directory' ? normalizeDirKey(project) : project)] = { monthlyUsd, setAt: new Date().toISOString() }
       await saveConfig(config)
-      console.log(`\n  Budget set: ${project} → $${monthlyUsd}/month`)
+      console.log(`\n  Budget set: ${scope} ${project} → $${monthlyUsd}/month`)
       console.log(`  Config: ${getConfigFilePath()}\n`)
       return
     }
@@ -1726,17 +1804,21 @@ program
     }
     await loadPricing()
     const monthProjects = await parseAllSessions(getDateRange('month').range, 'all')
+    const rows = summarizeBudgets(monthProjects, budgets)
     let anyOver = false
     const N = 30
     console.log('\n  Budget Status  ·  this month\n')
-    console.log(`  ${'Project'.padEnd(N)}  ${'Budget'.padStart(10)}  ${'Spent'.padStart(10)}  ${'Status'.padStart(8)}`)
+    console.log(`  ${'Target'.padEnd(N)}  ${'Budget'.padStart(10)}  ${'Spent'.padStart(10)}  ${'Status'.padStart(8)}`)
     console.log(`  ${'─'.repeat(N + 32)}`)
-    for (const [proj, budget] of Object.entries(budgets)) {
-      const match = monthProjects.find(p => p.project === proj || (p.projectPath && p.projectPath.includes(proj)))
-      const spent = match?.totalCostUSD ?? 0
-      const status = spent > budget.monthlyUsd ? 'OVER' : spent > budget.monthlyUsd * 0.8 ? 'NEAR' : 'OK'
+    for (const row of rows) {
+      const spent = row.spentUsd
+      const budget = row.budgetUsd
+      const status = row.status
       if (status === 'OVER') anyOver = true
-      console.log(`  ${proj.slice(0, N - 2).padEnd(N)}  ${formatCost(budget.monthlyUsd).padStart(10)}  ${formatCost(spent).padStart(10)}  ${status.padStart(8)}`)
+      const label = row.target.scope === 'project'
+        ? row.target.label
+        : `${row.target.scope}:${row.target.label}`
+      console.log(`  ${label.slice(0, N - 2).padEnd(N)}  ${formatCost(budget).padStart(10)}  ${formatCost(spent).padStart(10)}  ${status.padStart(8)}`)
     }
     console.log()
     if (anyOver) process.exitCode = 1
