@@ -147,6 +147,103 @@ function projectPathMatches(projectPath: string, dir: string): boolean {
   return normalizedDir.length > 0 && (normalizedPath === normalizedDir || normalizedPath.startsWith(`${normalizedDir}/`))
 }
 
+type CostDriverRow = {
+  type: 'model' | 'tool' | 'prompt'
+  name: string
+  cost: number
+  share: number
+}
+
+type ProjectIntelligenceRow = {
+  name: string
+  path: string
+  cost: number
+  wasteScore: number
+  topCostDrivers: CostDriverRow[]
+}
+
+type ProviderIntelligenceRow = {
+  name: string
+  cost: number
+  wasteScore: number
+}
+
+function clampWasteScore(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value * 10) / 10))
+}
+
+function promptTheme(text: string): string {
+  const trimmed = text.trim().replace(/\s+/g, ' ')
+  if (!trimmed) return '<empty prompt>'
+  return trimmed.length > 64 ? `${trimmed.slice(0, 61)}...` : trimmed
+}
+
+function buildProjectIntelligence(projects: ProjectSummary[]): { projects: ProjectIntelligenceRow[]; providers: ProviderIntelligenceRow[] } {
+  const providerTotals = new Map<string, { cost: number; weak: number }>()
+
+  const projectsWithIntelligence = projects.map(project => {
+    const totalCost = project.totalCostUSD
+    const modelCosts = new Map<string, number>()
+    const toolCosts = new Map<string, number>()
+    const promptCosts = new Map<string, number>()
+    let weakCost = 0
+
+    for (const session of project.sessions) {
+      const sessionCost = session.totalCostUSD
+      for (const [model, entry] of Object.entries(session.modelBreakdown)) {
+        modelCosts.set(model, (modelCosts.get(model) ?? 0) + entry.costUSD)
+      }
+      for (const [tool, entry] of Object.entries(session.toolBreakdown)) {
+        toolCosts.set(tool, (toolCosts.get(tool) ?? 0) + sessionCost * (entry.calls / Math.max(session.apiCalls, 1)))
+      }
+      for (const turn of session.turns) {
+        const turnCost = turn.assistantCalls.reduce((sum, call) => sum + call.costUSD, 0)
+        const theme = promptTheme(turn.userMessage)
+        promptCosts.set(theme, (promptCosts.get(theme) ?? 0) + turnCost)
+        const hasWeakSignals =
+          turn.assistantCalls.length > 2 ||
+          turn.retries >= 2 ||
+          (!turn.hasEdits && turn.assistantCalls.length > 0)
+        if (hasWeakSignals) weakCost += turnCost
+        for (const call of turn.assistantCalls) {
+          const provider = call.provider
+          const providerEntry = providerTotals.get(provider) ?? { cost: 0, weak: 0 }
+          providerEntry.cost += call.costUSD
+          if (hasWeakSignals) providerEntry.weak += call.costUSD
+          providerTotals.set(provider, providerEntry)
+        }
+      }
+    }
+
+    const share = (cost: number) => (totalCost > 0 ? cost / totalCost : 0)
+    const drivers: CostDriverRow[] = [
+      ...[...modelCosts.entries()].map(([name, cost]) => ({ type: 'model' as const, name, cost, share: share(cost) })),
+      ...[...toolCosts.entries()].map(([name, cost]) => ({ type: 'tool' as const, name, cost, share: share(cost) })),
+      ...[...promptCosts.entries()].map(([name, cost]) => ({ type: 'prompt' as const, name, cost, share: share(cost) })),
+    ]
+
+    drivers.sort((a, b) => b.cost - a.cost || a.type.localeCompare(b.type) || a.name.localeCompare(b.name))
+
+    return {
+      name: project.project,
+      path: project.projectPath,
+      cost: totalCost,
+      wasteScore: clampWasteScore(totalCost > 0 ? (weakCost / totalCost) * 100 : 0),
+      topCostDrivers: drivers.slice(0, 5),
+    }
+  })
+
+  const providers = [...providerTotals.entries()]
+    .map(([name, data]) => ({
+      name,
+      cost: data.cost,
+      wasteScore: clampWasteScore(data.cost > 0 ? (data.weak / data.cost) * 100 : 0),
+    }))
+    .sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name))
+
+  return { projects: projectsWithIntelligence.sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name)), providers }
+}
+
 export function summarizeBudgets(projects: ProjectSummary[], budgets: Record<string, { monthlyUsd: number; setAt: string }>): BudgetStatusRow[] {
   const modelCosts = new Map<string, number>()
   for (const project of projects) {
@@ -404,6 +501,7 @@ function buildJsonReport(projects: ProjectSummary[], period: string, periodKey: 
     .flatMap(p => p.sessions.map(s => ({ project: p.project, sessionId: s.sessionId, date: s.firstTimestamp ? dateKey(s.firstTimestamp) : null, cost: convertCost(s.totalCostUSD), calls: s.apiCalls })))
     .sort((a, b) => b.cost - a.cost)
     .slice(0, 5)
+  const intelligence = buildProjectIntelligence(projects)
 
   return {
     generated: new Date().toISOString(),
@@ -430,6 +528,21 @@ function buildJsonReport(projects: ProjectSummary[], period: string, periodKey: 
     mcpServers: sortedMap(mcpMap),
     shellCommands: sortedMap(bashMap),
     topSessions,
+    projectIntelligence: {
+      projects: intelligence.projects.map(project => ({
+        ...project,
+        cost: convertCost(project.cost),
+        topCostDrivers: project.topCostDrivers.map(driver => ({
+          ...driver,
+          cost: convertCost(driver.cost),
+          share: Math.round(driver.share * 1000) / 10,
+        })),
+      })),
+      providers: intelligence.providers.map(provider => ({
+        ...provider,
+        cost: convertCost(provider.cost),
+      })),
+    },
   }
 }
 

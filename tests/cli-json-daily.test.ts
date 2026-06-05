@@ -67,6 +67,27 @@ function assistantNoEditLine(sessionId: string, timestamp: string, messageId: st
   })
 }
 
+function assistantWeakLine(sessionId: string, timestamp: string, messageId: string): string {
+  return JSON.stringify({
+    type: 'assistant',
+    sessionId,
+    timestamp,
+    message: {
+      id: messageId,
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-sonnet-4-5',
+      content: [
+        { type: 'text', text: 'thinking aloud' },
+        { type: 'tool_use', id: 'tu-weak-1', name: 'Bash', input: { command: 'echo hi' } },
+        { type: 'tool_use', id: 'tu-weak-2', name: 'Bash', input: { command: 'echo there' } },
+        { type: 'tool_use', id: 'tu-weak-3', name: 'Bash', input: { command: 'echo again' } },
+      ],
+      usage: { input_tokens: 1500, output_tokens: 200 },
+    },
+  })
+}
+
 describe('codeburn report --format json daily[] one-shot fields (issue #279)', () => {
   it('exposes per-day turns / editTurns / oneShotTurns / oneShotRate', async () => {
     const home = await mkdtemp(join(tmpdir(), 'codeburn-cli-json-daily-'))
@@ -165,6 +186,60 @@ describe('codeburn report --format json daily[] one-shot fields (issue #279)', (
       // null, not 0 — the rate is undefined when no edits happened, and a
       // chat-only day would otherwise read as 0% one-shot which is misleading.
       expect(day.oneShotRate).toBeNull()
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it('includes project intelligence with top cost drivers and waste scores', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'codeburn-cli-json-intel-'))
+
+    try {
+      const projectDir = join(home, '.claude', 'projects', 'work-app')
+      await mkdir(projectDir, { recursive: true })
+
+      await writeFile(
+        join(projectDir, 'session.jsonl'),
+        [
+          userLine('s1', '2026-04-10T09:00:00Z'),
+          assistantEditLine('s1', '2026-04-10T09:01:00Z', 'm-edit-1'),
+          userLine('s1', '2026-04-10T10:00:00Z'),
+          assistantWeakLine('s1', '2026-04-10T10:01:00Z', 'm-weak-1'),
+        ].join('\n'),
+      )
+
+      const result = runCli([
+        '--format', 'json',
+        '--from', '2026-04-10',
+        '--to', '2026-04-10',
+        '--provider', 'claude',
+      ], home)
+
+      expect(result.status).toBe(0)
+      const report = JSON.parse(result.stdout) as {
+        projectIntelligence?: {
+          projects: Array<{
+            name: string
+            path: string
+            cost: number
+            wasteScore: number
+            topCostDrivers: Array<{ type: string; name: string; cost: number; share: number }>
+          }>
+          providers: Array<{ name: string; cost: number; wasteScore: number }>
+        }
+      }
+
+      expect(report.projectIntelligence).toBeDefined()
+      expect(report.projectIntelligence!.projects).toHaveLength(1)
+      const project = report.projectIntelligence!.projects[0]!
+      expect(project.name).toBe('work-app')
+      expect(project.topCostDrivers.length).toBeGreaterThan(0)
+      expect(project.topCostDrivers.some(d => d.type === 'model')).toBe(true)
+      expect(project.topCostDrivers.some(d => d.type === 'tool')).toBe(true)
+      expect(project.topCostDrivers.some(d => d.type === 'prompt')).toBe(true)
+      expect(project.wasteScore).toBeGreaterThan(0)
+      expect(report.projectIntelligence!.providers.length).toBeGreaterThan(0)
+      expect(report.projectIntelligence!.providers[0]!.wasteScore).toBeGreaterThanOrEqual(0)
     } finally {
       await rm(home, { recursive: true, force: true })
     }
